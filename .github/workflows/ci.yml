@@ -6,6 +6,7 @@ on:
 
 jobs:
   check:
+    name: typecheck, lint, unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -19,3 +20,30 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+
+  db:
+    name: database tests (local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.1.0 # same as local
+      - run: pnpm install --frozen-lockfile
+      - name: Start Supabase (applies supabase/migrations)
+        run: supabase start
+      - name: Write .env.local from the local stack
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "DATABASE_URL=$DB_URL"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY"
+          } > .env.local
+      - run: pnpm test:db

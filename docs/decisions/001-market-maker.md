@@ -1,6 +1,6 @@
 # 001 · Market maker: constant product (CPMM, p = 0.5)
 
-**Status:** accepted, 2026-11-10 · *Draft by Claude, for Mael to rewrite in their own words.*
+**Status:** accepted, 2026-11-10 (merged in PR #1)
 
 ## Decision
 Prices come from a constant-product market maker, the design Manifold uses. The pool holds YES and NO shares; every trade keeps `yes × no` constant, and the probability of YES is `no / (yes + no)`. A market opens with 100 YES and 100 NO (50%). Code: `src/core/amm.ts`.

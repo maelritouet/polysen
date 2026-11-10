@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794325861883,
+      "tag": "20261110155101_lock_down_api_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794325865260,
+      "tag": "20261110155105_auth_and_wallet",
+      "breakpoints": true
+    }
+  ]
+}

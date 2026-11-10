@@ -6,16 +6,20 @@ import type { Coins } from "./money";
  * edits a balance directly.
  */
 
-export type LedgerReason =
-  | "grant" // starting balance
-  | "drop" // daily drop, streak bonus included
-  | "bet" // negative: coins into a market
-  | "sale" // positive: coins out of a market from selling shares
-  | "payout" // positive: winning shares paid at resolution
-  | "refund" // a cancelled market unwinding (negative when profit is taken back)
-  | "creator_bonus" // a new player bet on your market
-  | "seed" // negative: the creator's 100 coins opening a market
-  | "seed_return"; // the creator's share of the pool at resolution or cancel
+/** Every reason a coin can move. The database enum is built from this list. */
+export const LEDGER_REASONS = [
+  "grant", // starting balance
+  "drop", // daily drop, streak bonus included
+  "bet", // negative: coins into a market
+  "sale", // positive: coins out of a market from selling shares
+  "payout", // positive: winning shares paid at resolution
+  "refund", // a cancelled market unwinding (negative when profit is taken back)
+  "creator_bonus", // a new player bet on your market
+  "seed", // negative: the creator's 100 coins opening a market
+  "seed_return", // the creator's share of the pool at resolution or cancel
+] as const;
+
+export type LedgerReason = (typeof LEDGER_REASONS)[number];
 
 export interface LedgerEntry {
   memberId: string;
