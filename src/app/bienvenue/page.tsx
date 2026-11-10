@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +9,7 @@ import { getProfile } from "@/server/members";
 import { currentUserId } from "@/server/session";
 import { ProfileForm } from "./profile-form";
 
-export default async function BienvenuePage() {
+async function BienvenuePageContent() {
   const userId = await currentUserId();
   if (!userId) redirect("/connexion?suivant=/bienvenue");
   if (await getProfile(db, userId)) redirect("/");
@@ -26,5 +28,14 @@ export default async function BienvenuePage() {
         <ProfileForm inviteCode={code} />
       </CardContent>
     </Card>
+  );
+}
+
+/** Instant shell; the per-member content streams in (Cache Components). */
+export default function BienvenuePage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <BienvenuePageContent />
+    </Suspense>
   );
 }

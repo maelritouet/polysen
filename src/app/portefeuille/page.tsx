@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { LedgerReason } from "@/core/ledger";
@@ -24,7 +26,7 @@ const REASON_LABELS: Record<LedgerReason, string> = {
 
 const DATE = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" });
 
-export default async function PortefeuillePage() {
+async function PortefeuillePageContent() {
   const me = await requireMember();
   const [balance, history] = await Promise.all([getBalance(db, me.id), getHistory(db, me.id)]);
   const h = await headers();
@@ -82,5 +84,14 @@ export default async function PortefeuillePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** Instant shell; the per-member content streams in (Cache Components). */
+export default function PortefeuillePage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <PortefeuillePageContent />
+    </Suspense>
   );
 }
