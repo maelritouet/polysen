@@ -1,6 +1,6 @@
 # 002 · Coin amounts: whole hundredths, shown with two decimals
 
-**Status:** accepted, 2026-11-10 · *Draft by Claude, for Mael to rewrite in their own words.*
+**Status:** accepted, 2026-11-10 (merged in PR #1)
 
 ## Decision
 Every coin amount is a `bigint` counting hundredths of a coin (100 coins = `10000n`). The UI always shows two decimals (`37.42`). Shares and prices use high-precision decimals (`decimal.js`), never JS floating-point numbers. Code: `src/core/money.ts`.

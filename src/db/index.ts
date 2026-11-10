@@ -1,7 +1,5 @@
 import "server-only";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "./schema";
+import { createDb, type Db } from "./client";
 
 /**
  * Server-only database client. The browser never talks to the database:
@@ -10,6 +8,4 @@ import * as schema from "./schema";
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is not set (see .env.example)");
 
-// prepare: false is required by Supabase's transaction pooler.
-const client = postgres(url, { prepare: false });
-export const db = drizzle(client, { schema });
+export const db: Db = createDb(url).db;

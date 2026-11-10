@@ -4,13 +4,16 @@ Play-money prediction market for a friend group. Spec: docs/PRD.md · Build plan
 @AGENTS.md
 
 # Commands
-- pnpm dev / pnpm test / pnpm typecheck / pnpm lint / pnpm db:generate / pnpm db:migrate
+- pnpm dev / pnpm test (unit, no DB) / pnpm test:db (needs `supabase start`) / pnpm typecheck / pnpm lint
+- pnpm db:generate (writes a migration into supabase/migrations) / pnpm db:reset (re-applies all migrations locally)
 
 # Rules
 - IMPORTANT: src/core/ holds the coin maths (money, amm, settlement, ledger). Change it only after Mael approves a plan, keep every rule in docs/core-test-cases.md tested, and explain the maths in the pull request.
 - Coin amounts are bigint hundredths (`Coins`), never JS numbers. Shares and prices use `D` (decimal.js) from src/core/money.ts.
 - Coins move only in server functions, inside one database transaction. Never from the browser.
-- The browser never queries the database. Every table gets row-level security (deny-all) in the same migration that creates it.
+- The browser never queries the database. Every table gets row-level security (deny-all) in the same migration that creates it; the API roles have no table privileges (migration lock_down_api_roles).
+- Every server action checks the session itself (requireMember / currentUserId). proxy.ts is a convenience, not the security boundary.
+- DB tests create their own users (@test.polysen.local) and clean up only those: never truncate tables.
 - No secrets in code. Read them from .env.local (see .env.example).
 - Run pnpm typecheck and pnpm test before saying a task is done; a Stop hook enforces it.
 - No dates or week numbers in plans or docs: refer to phases.

@@ -1,6 +1,6 @@
 # 004 · Cancelling a market takes back profit already taken, never below zero
 
-**Status:** accepted, 2026-11-10 · *Draft by Claude, for Mael to rewrite in their own words.*
+**Status:** accepted, 2026-11-10 (merged in PR #1)
 
 ## The problem
 Léa buys YES for 100, the price rises, and Léa sells for 160. Then the market is cancelled. "Refund what everyone put in" means Léa owes 60, but those coins may already be spent.

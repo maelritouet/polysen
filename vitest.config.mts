@@ -7,6 +7,25 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/*.test.ts"],
+          exclude: ["src/**/*.db.test.ts"],
+        },
+      },
+      {
+        // Needs the local database: `supabase start`.
+        extends: true,
+        test: {
+          name: "db",
+          include: ["src/**/*.db.test.ts"],
+          fileParallelism: false,
+          testTimeout: 20_000,
+        },
+      },
+    ],
   },
 });
