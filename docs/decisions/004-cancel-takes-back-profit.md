@@ -3,7 +3,7 @@
 **Status:** accepted, 2026-11-10 · *Draft by Claude, for Mael to rewrite in their own words.*
 
 ## The problem
-Léa buys YES for 100, the price rises, she sells for 160. Then the market is cancelled. "Refund what everyone put in" means Léa owes 60, but she may have spent it.
+Léa buys YES for 100, the price rises, and Léa sells for 160. Then the market is cancelled. "Refund what everyone put in" means Léa owes 60, but those coins may already be spent.
 
 ## Decision
 A cancel unwinds everyone's net result:

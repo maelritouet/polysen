@@ -150,7 +150,7 @@ describe("rule 9, decided 2026-11-10: take back profit that's there, never below
     ]);
   };
 
-  it("takes Léa's profit back in full when she still has it", () => {
+  it("takes Léa's profit back in full when Léa still has it", () => {
     const b = profitable();
     const leaProfit = -b.positions.get("lea")!.invested;
     expect(leaProfit).toBeGreaterThan(0n);
@@ -181,7 +181,7 @@ describe("rule 9, decided 2026-11-10: take back profit that's there, never below
 
   it("if the gap is bigger than the seed, the creator gets 0 and other refunds shrink in proportion", () => {
     // One sale can't make more than about the seed in profit; repeated swings can.
-    // Léa rides three swings caused by whales, takes her profit each time,
+    // Léa rides three swings caused by whales, taking profit each time,
     // then spends it all elsewhere (balance 0).
     const b = book([
       ["lea", "buy", "YES", 100000n],
