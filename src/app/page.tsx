@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageSkeleton } from "@/components/page-skeleton";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
@@ -7,7 +9,7 @@ import { getBalance, hasClaimedToday } from "@/server/wallet";
 import { signOut } from "./connexion/actions";
 import { DropButton } from "./drop-button";
 
-export default async function HomePage() {
+async function HomePageContent() {
   const me = await requireMember();
   const [balance, claimed] = await Promise.all([getBalance(db, me.id), hasClaimedToday(db, me.id)]);
 
@@ -35,5 +37,14 @@ export default async function HomePage() {
       </Card>
       <p className="text-sm text-muted-foreground">Les marchés arrivent bientôt.</p>
     </div>
+  );
+}
+
+/** Instant shell; the per-member content streams in (Cache Components). */
+export default function HomePage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <HomePageContent />
+    </Suspense>
   );
 }
