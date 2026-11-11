@@ -1,6 +1,6 @@
 # 003 · The creator's seed: leftovers go back to the creator
 
-**Status:** accepted, 2026-11-10 (merged in PR #1)
+**Status:** superseded by 007 on 2026-11-11 (the creator now gets back at most the seed + 1% of what the crowd lost). Accepted 2026-11-10, merged in PR #1.
 
 ## Decision
 Launching a market costs 100 coins, which seed the pool. At resolution the creator receives the pool's leftover winning shares (1 coin each) plus everyone's rounding dust. That can be more or less than 100. On a cancel, the creator gets the 100 back (see 004 for the one exception). Code: `src/core/settlement.ts`.

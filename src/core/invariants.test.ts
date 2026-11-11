@@ -156,18 +156,35 @@ function checkInvariants(sim: Simulation): void {
     expect(sim.marketNet(id)).toBe(0n);
   }
 
-  // Rule 8: every resolution paid each winner exactly their shares, rounded
-  // down to the hundredth, and the creator's seed return was never negative.
+  // Rules 8, 13 and 14 on every resolution:
+  //  - each winner got at least their shares, rounded down to the hundredth;
+  //  - the creator got back the pool's leftovers when the crowd was right, and
+  //    at most the seed + 1% of the surplus (+ rounding dust) when it was wrong;
+  //  - the bonus is 1% of bets − sales, rounded down, never negative.
   for (const r of sim.resolutions()) {
+    let basePaid = 0n;
     for (const [memberId, p] of r.before.positions) {
       const shares = r.outcome === "YES" ? p.yes : p.no;
+      const base = BigInt(shares.mul(100).floor().toFixed(0));
+      basePaid += base;
       const paid = r.transfers
         .filter((t) => t.memberId === memberId && t.reason === "payout")
         .reduce((s, t) => s + t.amount, 0n);
-      expect(paid).toBe(BigInt(shares.mul(100).floor().toFixed(0)));
+      expect(paid).toBeGreaterThanOrEqual(base);
     }
-    const back = r.transfers.find((t) => t.reason === "seed_return");
-    expect(back && back.amount >= 0n).toBe(true);
+    for (const t of r.transfers) expect(t.amount).toBeGreaterThanOrEqual(0n);
+    const leftover = coinsIn(r.before) - basePaid;
+    const back = r.transfers.find((t) => t.reason === "seed_return")!.amount;
+    if (leftover <= MARKET_SEED) {
+      expect(back).toBe(leftover);
+    } else {
+      const cap = MARKET_SEED + (leftover - MARKET_SEED) / 100n;
+      expect(back).toBeGreaterThanOrEqual(cap);
+      expect(back).toBeLessThanOrEqual(cap + BigInt(r.before.positions.size));
+    }
+    const netBets = coinsIn(r.before) - MARKET_SEED;
+    const bonus = r.transfers.find((t) => t.reason === "creator_bonus")?.amount ?? 0n;
+    expect(bonus).toBe(netBets > 0n ? netBets / 100n : 0n);
   }
 }
 

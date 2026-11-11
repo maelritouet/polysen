@@ -2,7 +2,6 @@ import { newPool, quoteBuy, quoteSell, type Side } from "./amm";
 import {
   balanceOf,
   canSpend,
-  CREATOR_BONUS,
   dailyDropAmount,
   isTradingReason,
   MARKET_SEED,
@@ -119,21 +118,16 @@ export class Simulation {
     if (!canSpend(this.balance(memberId), amount)) throw new Error("Not enough coins");
     const q = quoteBuy(m.book.pool, side, amount);
 
-    const old = m.book.positions.get(memberId);
-    const pos = old ?? { yes: D(0), no: D(0), invested: 0n };
+    const pos = m.book.positions.get(memberId) ?? { yes: D(0), no: D(0), invested: 0n };
     const next: Position = {
       yes: side === "YES" ? pos.yes.plus(q.shares) : pos.yes,
       no: side === "NO" ? pos.no.plus(q.shares) : pos.no,
       invested: pos.invested + amount,
     };
-    const firstBet = !old && memberId !== m.book.creatorId;
 
     // Commit.
     m.book = { ...m.book, pool: q.pool, positions: new Map(m.book.positions).set(memberId, next) };
     this.ledger.push({ memberId, amount: -amount, reason: "bet", marketId });
-    if (firstBet) {
-      this.mint({ memberId: m.book.creatorId, amount: CREATOR_BONUS, reason: "creator_bonus", marketId });
-    }
   }
 
   sell(memberId: string, marketId: string, side: Side, shares: Dec): void {
@@ -181,7 +175,10 @@ export class Simulation {
   private settle(marketId: string, m: SimMarket, transfers: Transfer[], status: Status): void {
     m.status = status;
     for (const t of transfers) {
-      if (t.amount !== 0n) this.ledger.push({ ...t, marketId });
+      if (t.amount === 0n) continue;
+      // The bonus is new coins; everything else moves the market's own coins.
+      if (t.reason === "creator_bonus") this.mint({ ...t, marketId });
+      else this.ledger.push({ ...t, marketId });
     }
   }
 

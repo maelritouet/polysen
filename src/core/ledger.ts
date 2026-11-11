@@ -14,7 +14,7 @@ export const LEDGER_REASONS = [
   "sale", // positive: coins out of a market from selling shares
   "payout", // positive: winning shares paid at resolution
   "refund", // a cancelled market unwinding (negative when profit is taken back)
-  "creator_bonus", // a new player bet on your market
+  "creator_bonus", // 1% of what was bet on your market, paid at resolution
   "seed", // negative: the creator's 100 coins opening a market
   "seed_return", // the creator's share of the pool at resolution or cancel
 ] as const;
@@ -35,7 +35,6 @@ export const DAILY_DROP: Coins = 5000n; // 50 coins
 export const STREAK_STEP: Coins = 1000n; // +10 coins per consecutive day
 export const STREAK_MAX_BONUS: Coins = 5000n; // up to +50 coins
 export const MARKET_SEED: Coins = 10000n; // 100 coins to launch a market
-export const CREATOR_BONUS: Coins = 1000n; // 10 coins per new player on your market
 
 export function balanceOf(entries: Iterable<LedgerEntry>, memberId: string): Coins {
   let total = 0n;
@@ -58,6 +57,16 @@ export function dailyDropAmount(streakDays: number): Coins {
   }
   const bonus = STREAK_STEP * BigInt(streakDays - 1);
   return DAILY_DROP + (bonus < STREAK_MAX_BONUS ? bonus : STREAK_MAX_BONUS);
+}
+
+/**
+ * The creator bonus, paid once when a market resolves (decision 007):
+ * 1% of every bet minus every sale on the market, the creator's own included,
+ * rounded down. Buying and selling straight back nets to zero, so it earns
+ * nothing. Never paid on a cancel.
+ */
+export function creatorBonus(netBets: Coins): Coins {
+  return netBets > 0n ? netBets / 100n : 0n;
 }
 
 const TRADING_REASONS: ReadonlySet<LedgerReason> = new Set(["bet", "sale", "payout", "refund"]);

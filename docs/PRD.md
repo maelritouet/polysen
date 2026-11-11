@@ -93,7 +93,7 @@ Every number here is a starting value to tune with the founders.
 | Daily drop | 50 coins, claimed by opening the app | A reason to come back; it does not pile up if you skip a day |
 | Streak bonus | +10 per consecutive day, up to +50 | Rewards habit without drowning the economy |
 | Launching a market | 100 coins, which become the market's starting pool | Stops spam and makes the first bets possible |
-| Creator bonus | 10 coins for each person who bets on your market | Rewards questions that get the whole group in; a fee on trades would earn almost nothing at this size |
+| Creator bonus | 1% of everything bet on your market (bets minus sales), paid when it resolves | Rewards questions that get the whole group in. The creator never profits from the seed beyond 1% of what the crowd lost (decision 007) |
 | Winning share | Pays 1 coin | A share bought at 0.25 quadruples if you are right |
 
 Coins cannot be bought, sent to another member or cashed out. Leaderboards rank **profit from trading**, not balance, so the daily drop funds play but never wins the ranking. A season is one semester; at the start of each season everyone goes back to 1,000 coins and past winners stay in a hall of fame.
