@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
-import { inArray, sql } from "drizzle-orm";
+import { inArray, or, sql } from "drizzle-orm";
+import { newPool, quoteBuy, type Side } from "@/core/amm";
+import { MARKET_SEED } from "@/core/ledger";
+import { D } from "@/core/money";
 import { createDb, type Db } from "@/db/client";
-import { dailyClaims, ledger, profiles } from "@/db/schema";
+import { dailyClaims, ledger, markets, marketTags, profiles, trades } from "@/db/schema";
 
 /**
  * Helpers for tests that run against the local Supabase database
@@ -37,12 +40,62 @@ export async function createRootMember(db: Db, users: Set<string>): Promise<{ id
   return { id, inviteCode };
 }
 
+/**
+ * Inserts an open market straight into the table, bypassing the server
+ * functions. For schema and RLS tests only. Returns its id.
+ */
+export async function insertTestMarket(db: Db, creatorId: string, closeAt = new Date(Date.now() + 86_400_000)): Promise<string> {
+  const pool = newPool(MARKET_SEED);
+  const [m] = await db
+    .insert(markets)
+    .values({
+      creatorId,
+      question: "Test market?",
+      criteria: "Test criteria",
+      closeAt,
+      status: "open",
+      seed: MARKET_SEED,
+      poolYes: pool.yes.toFixed(12),
+      poolNo: pool.no.toFixed(12),
+    })
+    .returning({ id: markets.id });
+  return m.id;
+}
+
+/**
+ * Inserts a buy straight into `trades` and moves the market's pool with the
+ * core's quote, bypassing the server functions (no ledger rows). Schema tests only.
+ */
+export async function insertTestBuy(db: Db, marketId: string, memberId: string, side: Side, coins: bigint): Promise<void> {
+  const [m] = await db.select({ yes: markets.poolYes, no: markets.poolNo }).from(markets).where(sql`${markets.id} = ${marketId}`);
+  const q = quoteBuy({ yes: D(m.yes), no: D(m.no) }, side, coins);
+  await db.insert(trades).values({
+    marketId,
+    memberId,
+    side,
+    kind: "buy",
+    coins,
+    shares: q.shares.toFixed(12),
+    probBefore: q.probBefore.toFixed(12),
+    probAfter: q.probAfter.toFixed(12),
+    requestId: randomUUID(),
+  });
+  await db
+    .update(markets)
+    .set({ poolYes: q.pool.yes.toFixed(12), poolNo: q.pool.no.toFixed(12) })
+    .where(sql`${markets.id} = ${marketId}`);
+}
+
 /** Deletes everything the test users created, then the users themselves. */
 export async function cleanup(db: Db, users: Set<string>): Promise<void> {
   const ids = [...users];
   if (!ids.length) return;
+  const theirMarkets = db.select({ id: markets.id }).from(markets).where(inArray(markets.creatorId, ids));
   await db.delete(dailyClaims).where(inArray(dailyClaims.memberId, ids));
-  await db.delete(ledger).where(inArray(ledger.memberId, ids));
+  await db.delete(ledger).where(or(inArray(ledger.memberId, ids), inArray(ledger.marketId, theirMarkets)));
+  await db.delete(trades).where(or(inArray(trades.memberId, ids), inArray(trades.marketId, theirMarkets)));
+  await db.delete(marketTags).where(or(inArray(marketTags.memberId, ids), inArray(marketTags.marketId, theirMarkets)));
+  await db.delete(markets).where(inArray(markets.creatorId, ids));
   await db.update(profiles).set({ invitedBy: null }).where(inArray(profiles.invitedBy, ids));
   await db.delete(profiles).where(inArray(profiles.id, ids));
   await db.execute(sql`delete from auth.users where id in ${ids}`);

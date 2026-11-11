@@ -7,6 +7,7 @@ import {
   date,
   index,
   integer,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -14,6 +15,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  pgView,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { authUsers } from "drizzle-orm/supabase";
@@ -29,6 +31,18 @@ import { LEDGER_REASONS } from "../core/ledger";
 
 export const memberRole = pgEnum("member_role", ["member", "admin"]);
 export const ledgerReason = pgEnum("ledger_reason", LEDGER_REASONS);
+/** pending_approval: a tagged member hasn't approved yet. The result states come in phase 5. */
+export const marketStatus = pgEnum("market_status", ["pending_approval", "open", "resolved", "cancelled"]);
+export const tagStatus = pgEnum("tag_status", ["pending", "approved", "refused"]);
+export const tradeSide = pgEnum("trade_side", ["YES", "NO"]);
+export const tradeKind = pgEnum("trade_kind", ["buy", "sell"]);
+
+/**
+ * Shares, kept exactly: the core rounds every share amount to 12 decimals and
+ * coins are hundredths, so a pool or a position always fits in scale 12 with
+ * no rounding at all. Read back as strings and parsed with `D`.
+ */
+const shares = (name: string) => numeric(name, { precision: 32, scale: 12 });
 
 export const profiles = pgTable(
   "profiles",
@@ -65,8 +79,8 @@ export const ledger = pgTable(
     /** Hundredths of a coin. Never zero. */
     amount: bigint("amount", { mode: "bigint" }).notNull(),
     reason: ledgerReason("reason").notNull(),
-    /** The market this movement belongs to (foreign key added with the markets table). */
-    marketId: uuid("market_id"),
+    /** The market this movement belongs to, if any. */
+    marketId: uuid("market_id").references((): AnyPgColumn => markets.id, { onDelete: "restrict" }),
     /** Client-generated id that makes a retried request a no-op. */
     requestId: uuid("request_id").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -92,3 +106,102 @@ export const dailyClaims = pgTable(
   },
   (t) => [primaryKey({ columns: [t.memberId, t.day] }), check("daily_claims_streak_positive", sql`${t.streak} >= 1`)],
 ).enableRLS();
+
+export const markets = pgTable(
+  "markets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    question: text("question").notNull(),
+    /** "How we'll know": one line on how the result will be judged. */
+    criteria: text("criteria").notNull(),
+    closeAt: timestamp("close_at", { withTimezone: true }).notNull(),
+    status: marketStatus("status").notNull(),
+    /** The creator's seed, in hundredths. */
+    seed: bigint("seed", { mode: "bigint" }).notNull(),
+    /** YES and NO shares held by the pool. */
+    poolYes: shares("pool_yes").notNull(),
+    poolNo: shares("pool_no").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("markets_creator_created_idx").on(t.creatorId, t.createdAt),
+    index("markets_status_close_idx").on(t.status, t.closeAt),
+    check("markets_question_len", sql`char_length(${t.question}) between 5 and 200`),
+    check("markets_criteria_len", sql`char_length(${t.criteria}) between 3 and 300`),
+    check("markets_seed_positive", sql`${t.seed} > 0`),
+    check("markets_pool_positive", sql`${t.poolYes} > 0 and ${t.poolNo} > 0`),
+    check("markets_close_after_creation", sql`${t.closeAt} > ${t.createdAt}`),
+  ],
+).enableRLS();
+
+/** A member named in a market. The market stays hidden until every tag is approved. */
+export const marketTags = pgTable(
+  "market_tags",
+  {
+    marketId: uuid("market_id")
+      .notNull()
+      .references(() => markets.id, { onDelete: "restrict" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    status: tagStatus("status").notNull().default("pending"),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.marketId, t.memberId] }), index("market_tags_member_idx").on(t.memberId)],
+).enableRLS();
+
+/** Every buy and sale, append-only. Positions and the price history come from here. */
+export const trades = pgTable(
+  "trades",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    marketId: uuid("market_id")
+      .notNull()
+      .references(() => markets.id, { onDelete: "restrict" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    side: tradeSide("side").notNull(),
+    kind: tradeKind("kind").notNull(),
+    /** Hundredths: the amount bet (buy) or the proceeds (sell). Always positive. */
+    coins: bigint("coins", { mode: "bigint" }).notNull(),
+    shares: shares("shares").notNull(),
+    /** Probability of YES around the trade, for the price chart (rounded to 12 decimals). */
+    probBefore: numeric("prob_before", { precision: 13, scale: 12 }).notNull(),
+    probAfter: numeric("prob_after", { precision: 13, scale: 12 }).notNull(),
+    /** Client-generated id: replaying the same request writes nothing new. */
+    requestId: uuid("request_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("trades_market_idx").on(t.marketId, t.id),
+    index("trades_member_idx").on(t.memberId),
+    check("trades_coins_positive", sql`${t.coins} > 0`),
+    check("trades_shares_positive", sql`${t.shares} > 0`),
+  ],
+).enableRLS();
+
+/**
+ * Each member's position in each market, summed from their trades.
+ * `invested` = coins bet − coins received from sales (core's Position.invested).
+ * security_invoker: the view runs with the caller's rights, so RLS on `trades`
+ * applies through it (a plain view would run as its owner and skip RLS).
+ */
+export const positions = pgView("positions", {
+  marketId: uuid("market_id").notNull(),
+  memberId: uuid("member_id").notNull(),
+  yes: shares("yes").notNull(),
+  no: shares("no").notNull(),
+  invested: bigint("invested", { mode: "bigint" }).notNull(),
+})
+  .with({ securityInvoker: true })
+  .as(
+    sql`select market_id, member_id,
+      coalesce(sum(case when side = 'YES' then (case when kind = 'buy' then shares else -shares end) end), 0) as yes,
+      coalesce(sum(case when side = 'NO' then (case when kind = 'buy' then shares else -shares end) end), 0) as no,
+      sum(case when kind = 'buy' then coins else -coins end)::bigint as invested
+    from trades group by market_id, member_id`,
+  );

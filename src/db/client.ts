@@ -13,3 +13,6 @@ export function createDb(url: string, options: { max?: number } = {}): { db: Db;
   const client = postgres(url, { prepare: false, max: options.max ?? 10 });
   return { db: drizzle(client, { schema }), close: () => client.end() };
 }
+
+/** A transaction handle, as passed to `db.transaction(async (tx) => ...)`. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
