@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { FeedList } from "@/components/feed-list";
 import { MobileTabBar } from "@/components/nav-links";
+import { Gain, PortfolioSummary } from "@/components/portfolio";
 import { formatCoinsFr } from "@/lib/format";
 import { ClosingCard, MarketCard } from "@/components/market/market-card";
 import { PageSkeleton } from "@/components/page-skeleton";
@@ -11,6 +12,7 @@ import { closingSoon, parseSort, sortMarkets, SORTS, type SortKey } from "@/lib/
 import { getFeed } from "@/server/feed";
 import { getMarketStats, getPriceHistories } from "@/server/history";
 import { listVisibleMarkets } from "@/server/markets";
+import { getPortfolio } from "@/server/portfolio";
 import { requireMember } from "@/server/session";
 import { getBalance, hasClaimedToday } from "@/server/wallet";
 import { DropButton } from "./drop-button";
@@ -18,15 +20,16 @@ import { DropButton } from "./drop-button";
 async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   const sort: SortKey = parseSort((await searchParams).tri);
   const me = await requireMember();
-  const [balance, claimed, markets, feed] = await Promise.all([
+  const [balance, claimed, markets, feed, portfolio] = await Promise.all([
     getBalance(db, me.id),
     hasClaimedToday(db, me.id),
     listVisibleMarkets(db, me.id),
     getFeed(db, me.id, 15),
+    getPortfolio(db, me.id),
   ]);
   const ids = markets.map((m) => m.id);
   const [histories, stats] = await Promise.all([getPriceHistories(db, ids), getMarketStats(db, ids)]);
-  const now = markets[0]?.asOf.getTime() ?? feed[0]?.at.getTime() ?? 0;
+  const now = portfolio.asOf.getTime();
   const enriched = markets.map((m) => ({ ...m, ...stats.get(m.id)! }));
   const soon = closingSoon(enriched, now);
   const sorted = sortMarkets(enriched, sort);
@@ -88,19 +91,31 @@ async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">[
         </div>
 
         <aside className="flex flex-col gap-4 lg:order-none order-first">
-          <div className={`rounded-xl border-line lg:border lg:p-4 ${claimed ? "hidden lg:block" : ""}`}>
-            <div className="hidden lg:block">
-              <p className="text-sm text-dim">Ton solde</p>
-              <p className="mt-1 text-3xl font-extrabold tabular-nums">
-                {formatCoinsFr(balance)} <span className="text-base font-normal text-dim">pièces</span>
-              </p>
+          {!claimed && (
+            <div className="lg:hidden">
+              <DropButton claimed={claimed} />
             </div>
+          )}
+          <div className="hidden rounded-xl border border-line p-4 lg:block">
+            <PortfolioSummary balance={balance} portfolio={portfolio} now={now} />
             {!claimed && (
-              <div className="lg:mt-4">
+              <div className="mt-4">
                 <DropButton claimed={claimed} />
               </div>
             )}
           </div>
+          {portfolio.open.length > 0 && (
+            <Link
+              href="/portefeuille"
+              className="flex items-center justify-between rounded-xl border border-line px-4 py-3 text-sm lg:hidden"
+            >
+              <span className="text-dim">
+                {portfolio.open.length} position{portfolio.open.length > 1 ? "s" : ""} · en jeu{" "}
+                <span className="font-semibold text-ink tabular-nums">{formatCoinsFr(portfolio.value)}</span>
+              </span>
+              <Gain amount={portfolio.value - portfolio.cost} className="font-semibold" />
+            </Link>
+          )}
           <section className="hidden lg:block">
             <h2 className="text-lg font-bold">Fil des potes</h2>
             <div className="mt-2">
