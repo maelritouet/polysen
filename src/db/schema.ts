@@ -129,6 +129,8 @@ export const markets = pgTable(
     outcome: tradeSide("outcome"),
     /** When the market was paid out or cancelled. */
     settledAt: timestamp("settled_at", { withTimezone: true }),
+    /** Set by a report: hidden from everyone but its creator until the admin looks (PRD). */
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
   },
   (t) => [
     index("markets_creator_created_idx").on(t.creatorId, t.createdAt),
@@ -261,6 +263,61 @@ export const comments = pgTable(
     index("comments_member_created_idx").on(t.memberId, t.createdAt),
     check("comments_body_len", sql`char_length(${t.body}) between 1 and 500`),
   ],
+).enableRLS();
+
+/** A member flagging a market, or a comment in it, for the admin. */
+export const reports = pgTable(
+  "reports",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    marketId: uuid("market_id")
+      .notNull()
+      .references(() => markets.id, { onDelete: "restrict" }),
+    /** Set when the report is about one comment rather than the market. */
+    commentId: bigint("comment_id", { mode: "bigint" }).references(() => comments.id, { onDelete: "restrict" }),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("reports_open_idx").on(t.handledAt, t.createdAt),
+    uniqueIndex("reports_once_idx").on(t.reporterId, t.marketId, sql`coalesce(${t.commentId}, 0)`),
+    check("reports_reason_len", sql`char_length(${t.reason}) between 3 and 300`),
+  ],
+).enableRLS();
+
+export const adminActionKind = pgEnum("admin_action_kind", [
+  "resolve",
+  "cancel",
+  "restore_market",
+  "delete_comment",
+  "dismiss_report",
+  "suspend",
+  "unsuspend",
+  "revoke_create",
+  "restore_create",
+]);
+
+/** Everything an admin does, readable by every member (PRD: "so friends can see I was fair"). */
+export const adminActions = pgTable(
+  "admin_actions",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    adminId: uuid("admin_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    kind: adminActionKind("kind").notNull(),
+    marketId: uuid("market_id").references(() => markets.id, { onDelete: "restrict" }),
+    commentId: bigint("comment_id", { mode: "bigint" }).references(() => comments.id, { onDelete: "restrict" }),
+    memberId: uuid("member_id").references(() => profiles.id, { onDelete: "restrict" }),
+    /** The outcome for a ruling, or the admin's note. */
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("admin_actions_created_idx").on(t.createdAt), check("admin_actions_note_len", sql`char_length(${t.note}) <= 300`)],
 ).enableRLS();
 
 /**

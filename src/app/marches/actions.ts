@@ -6,6 +6,7 @@ import type { Side } from "@/core/amm";
 import { db } from "@/db";
 import { formatCoinsFr, formatSharesFr } from "@/lib/format";
 import { parisLocalToDate } from "@/lib/paris-time";
+import { reportComment, reportMarket } from "@/server/admin";
 import { addComment, deleteMyComment } from "@/server/comments";
 import { isUserError } from "@/server/errors";
 import { createMarket, getVisibleMarket, removeMyMarket, respondToTag } from "@/server/markets";
@@ -188,5 +189,29 @@ export async function disputeResolutionAction(resolutionId: string, reason: stri
     return userErrorOr(err);
   }
   revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function reportMarketAction(marketId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  try {
+    await reportMarket(db, me.id, marketId, reason);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return null;
+}
+
+export async function reportCommentAction(commentId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(commentId)) return { error: "Message introuvable." };
+  try {
+    await reportComment(db, me.id, BigInt(commentId), reason);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath("/admin");
   return null;
 }

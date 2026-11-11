@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { displayPercent, newPool } from "@/core/amm";
 import { canSpend, MARKET_SEED } from "@/core/ledger";
 import { cancelRefunds } from "@/core/settlement";
@@ -215,6 +215,8 @@ export interface MarketSummary {
   /** YES probability shown on screen, 1 to 99. */
   percent: number;
   createdAt: Date;
+  /** Set while a report hides it (only its creator still sees it). */
+  hiddenAt: Date | null;
 }
 
 /**
@@ -225,8 +227,14 @@ export interface MarketSummary {
 export function visibleTo(viewerId: string) {
   return or(
     eq(markets.creatorId, viewerId),
-    sql`exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.memberId} = ${viewerId})`,
-    sql`not exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.status} <> 'approved')`,
+    and(
+      // A reported market is hidden from everyone but its creator until the admin looks.
+      isNull(markets.hiddenAt),
+      or(
+        sql`exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.memberId} = ${viewerId})`,
+        sql`not exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.status} <> 'approved')`,
+      ),
+    ),
   );
 }
 
@@ -240,6 +248,7 @@ const summaryColumns = {
   poolYes: markets.poolYes,
   poolNo: markets.poolNo,
   createdAt: markets.createdAt,
+  hiddenAt: markets.hiddenAt,
 };
 
 function toSummary(

@@ -148,6 +148,16 @@ async function PortefeuillePageContent() {
               </button>
             </form>
           </div>
+          <nav className="flex flex-col gap-2 text-sm">
+            <Link href="/journal" className="font-semibold text-dim hover:text-ink">
+              Journal des décisions de l&apos;admin →
+            </Link>
+            {me.role === "admin" && (
+              <Link href="/admin" className="font-semibold text-gold hover:text-ink">
+                Espace admin →
+              </Link>
+            )}
+          </nav>
           <form action={signOut}>
             <button type="submit" className="text-sm text-dim underline underline-offset-4">
               Se déconnecter

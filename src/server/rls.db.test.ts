@@ -14,7 +14,7 @@ import { claimDailyDrop } from "./wallet";
  * table, and no table privileges for the API roles at all.
  */
 
-const TABLES = ["profiles", "ledger", "daily_claims", "markets", "market_tags", "trades", "positions", "comments", "resolutions", "disputes"] as const;
+const TABLES = ["profiles", "ledger", "daily_claims", "markets", "market_tags", "trades", "positions", "comments", "resolutions", "disputes", "reports", "admin_actions"] as const;
 type Table = (typeof TABLES)[number];
 
 /** The column that points at the victim in each table. */
@@ -29,6 +29,8 @@ const OWNER: Record<Table, string> = {
   comments: "member_id",
   resolutions: "proposed_by",
   disputes: "member_id",
+  reports: "reporter_id",
+  admin_actions: "admin_id",
 };
 
 /** What an attacker would try to write. Untyped on purpose: they send whatever JSON they like. */
@@ -48,6 +50,10 @@ function attackRow(table: Table, victimId: string): Record<string, unknown> {
       return { market_id: "00000000-0000-0000-0000-000000000000", proposed_by: victimId, outcome: "YES", proof: "hacked", status: "accepted" };
     case "disputes":
       return { resolution_id: 1, member_id: victimId, reason: "hacked" };
+    case "reports":
+      return { reporter_id: victimId, market_id: "00000000-0000-0000-0000-000000000000", reason: "hacked" };
+    case "admin_actions":
+      return { admin_id: victimId, kind: "suspend", member_id: victimId };
     case "comments":
       return { member_id: victimId, market_id: "00000000-0000-0000-0000-000000000000", body: "hacked" };
     case "trades":
@@ -67,6 +73,8 @@ const ATTACK_UPDATE: Record<Table, Record<string, unknown>> = {
   comments: { body: "hacked" },
   resolutions: { status: "accepted" },
   disputes: { reason: "hacked" },
+  reports: { handled_at: "2000-01-01" },
+  admin_actions: { note: "hacked" },
 };
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
