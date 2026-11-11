@@ -1,7 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { cleanup, createRootMember, openTestDb } from "@/test/db";
+import { cleanup, createRootMember, insertTestBuy, insertTestMarket, openTestDb } from "@/test/db";
+import { marketTags } from "@/db/schema";
 import { claimDailyDrop } from "./wallet";
 
 /**
@@ -13,7 +14,48 @@ import { claimDailyDrop } from "./wallet";
  * table, and no table privileges for the API roles at all.
  */
 
-const TABLES = ["profiles", "ledger", "daily_claims"] as const;
+const TABLES = ["profiles", "ledger", "daily_claims", "markets", "market_tags", "trades", "positions"] as const;
+type Table = (typeof TABLES)[number];
+
+/** The column that points at the victim in each table. */
+const OWNER: Record<Table, string> = {
+  profiles: "id",
+  ledger: "member_id",
+  daily_claims: "member_id",
+  markets: "creator_id",
+  market_tags: "member_id",
+  trades: "member_id",
+  positions: "member_id",
+};
+
+/** What an attacker would try to write. Untyped on purpose: they send whatever JSON they like. */
+function attackRow(table: Table, victimId: string): Record<string, unknown> {
+  switch (table) {
+    case "ledger":
+      return { member_id: victimId, amount: 99999900, reason: "grant" };
+    case "daily_claims":
+      return { member_id: victimId, day: "2000-01-01", streak: 1 };
+    case "profiles":
+      return { id: victimId, first_name: "Hacker", nickname: "hacker", invite_code: "HACKED22" };
+    case "markets":
+      return { creator_id: victimId, question: "Hacked?", criteria: "yes", close_at: "2099-01-01", status: "open", seed: 1, pool_yes: 1, pool_no: 1 };
+    case "market_tags":
+      return { market_id: "00000000-0000-0000-0000-000000000000", member_id: victimId, status: "approved" };
+    case "trades":
+    case "positions":
+      return { member_id: victimId, market_id: "00000000-0000-0000-0000-000000000000", side: "YES", kind: "sell", coins: 99999900, shares: 1 };
+  }
+}
+
+const ATTACK_UPDATE: Record<Table, Record<string, unknown>> = {
+  profiles: { role: "admin" },
+  ledger: { amount: 99999900 },
+  daily_claims: { streak: 99 },
+  markets: { status: "cancelled" },
+  market_tags: { status: "approved" },
+  trades: { coins: 99999900 },
+  positions: { invested: -99999900 },
+};
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -30,6 +72,9 @@ beforeAll(async () => {
   const victim = await createRootMember(t.db, t.users);
   victimId = victim.id;
   await claimDailyDrop(t.db, victimId);
+  const marketId = await insertTestMarket(t.db, victimId);
+  await insertTestBuy(t.db, marketId, victimId, "YES", 1000n);
+  await t.db.insert(marketTags).values({ marketId, memberId: victimId });
 
   anon = createClient(url, key, { auth: { persistSession: false } });
 
@@ -58,22 +103,15 @@ for (const who of ["signed out", "signed in"] as const) {
       });
 
       it(`cannot insert into ${table}`, async () => {
-        // Untyped on purpose: an attacker sends whatever JSON they like.
-        const row: Record<string, unknown> =
-          table === "ledger"
-            ? { member_id: victimId, amount: 99999900, reason: "grant" }
-            : table === "daily_claims"
-              ? { member_id: victimId, day: "2000-01-01", streak: 1 }
-              : { id: victimId, first_name: "Hacker", nickname: "hacker", invite_code: "HACKED22" };
-        const { error } = await client().from(table).insert(row);
+        const { error } = await client().from(table).insert(attackRow(table, victimId));
         expect(error).not.toBeNull();
       });
 
       it(`cannot update ${table}`, async () => {
         const { data, error } = await client()
           .from(table)
-          .update(table === "ledger" ? { amount: 99999900 } : table === "daily_claims" ? { streak: 99 } : { role: "admin" })
-          .eq(table === "profiles" ? "id" : "member_id", victimId)
+          .update(ATTACK_UPDATE[table])
+          .eq(OWNER[table], victimId)
           .select();
         expect(data ?? []).toHaveLength(0);
         expect(error).not.toBeNull();
@@ -83,7 +121,7 @@ for (const who of ["signed out", "signed in"] as const) {
         const { data, error } = await client()
           .from(table)
           .delete()
-          .eq(table === "profiles" ? "id" : "member_id", victimId)
+          .eq(OWNER[table], victimId)
           .select();
         expect(data ?? []).toHaveLength(0);
         expect(error).not.toBeNull();
