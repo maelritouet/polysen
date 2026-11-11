@@ -2,7 +2,9 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { displayPercent, quoteSell, type Side } from "@/core/amm";
 import { D, type Coins, type Dec } from "@/core/money";
 import type { Db } from "@/db/client";
-import { ledger, markets, trades } from "@/db/schema";
+import { holdings } from "@/core/leaderboard";
+import { ledger, markets } from "@/db/schema";
+import { loadFills } from "./leaderboard";
 
 /** One side of one market the member still holds shares in. */
 export interface OpenPosition {
@@ -11,7 +13,7 @@ export interface OpenPosition {
   closeAt: Date;
   side: Side;
   shares: Dec;
-  /** Coins put in on this side minus coins taken out by sales (can go below zero). */
+  /** What the shares still held cost, at their average price (decision 011). */
   cost: Coins;
   /** What selling every share right now would pay, in hundredths. */
   value: Coins;
@@ -58,28 +60,8 @@ function resaleValue(pool: { yes: Dec; no: Dec }, side: Side, shares: Dec): Coin
  * quotes. Two holdings on one market are each valued alone, as if sold first.
  */
 export async function getPortfolio(db: Db, memberId: string, now: Date = new Date()): Promise<Portfolio> {
-  const signed = (col: typeof trades.shares | typeof trades.coins) =>
-    sql`sum(case when ${trades.kind} = 'buy' then ${col} else -${col} end)`;
-
-  const [held, settled] = await Promise.all([
-    db
-      .select({
-        marketId: trades.marketId,
-        side: trades.side,
-        shares: sql<string>`${signed(trades.shares)}`,
-        cost: sql<string>`${signed(trades.coins)}`,
-        question: markets.question,
-        closeAt: markets.closeAt,
-        poolYes: markets.poolYes,
-        poolNo: markets.poolNo,
-      })
-      .from(trades)
-      .innerJoin(markets, eq(markets.id, trades.marketId))
-      .where(and(eq(trades.memberId, memberId), eq(markets.status, "open")))
-      .groupBy(trades.marketId, trades.side, markets.id)
-      .having(sql`${signed(trades.shares)} > 0`)
-      // Most recently traded market first; YES before NO within a market.
-      .orderBy(desc(sql`max(max(${trades.createdAt})) over (partition by ${trades.marketId})`), trades.marketId, trades.side),
+  const [fills, settled] = await Promise.all([
+    loadFills(db, memberId),
     db
       .select({
         marketId: ledger.marketId,
@@ -102,20 +84,39 @@ export async function getPortfolio(db: Db, memberId: string, now: Date = new Dat
       .orderBy(desc(sql`max(${ledger.createdAt})`)),
   ]);
 
-  const open = held.map((r): OpenPosition => {
-    const pool = { yes: D(r.poolYes), no: D(r.poolNo) };
-    const shares = D(r.shares);
-    return {
-      marketId: r.marketId,
-      question: r.question,
-      closeAt: r.closeAt,
-      side: r.side,
-      shares,
-      cost: BigInt(r.cost),
-      value: resaleValue(pool, r.side, shares),
-      percent: displayPercent(pool),
-    };
-  });
+  // Cost = the average-cost basis of the shares still held (decision 011):
+  // a partial sale's gain is already realised, so it isn't counted again here.
+  const holding = holdings(fills);
+  const tradedOn = [...new Set(fills.map((f) => f.marketId))];
+  const live = tradedOn.length
+    ? await db
+        .select({ id: markets.id, question: markets.question, closeAt: markets.closeAt, poolYes: markets.poolYes, poolNo: markets.poolNo })
+        .from(markets)
+        .where(and(inArray(markets.id, tradedOn), eq(markets.status, "open")))
+    : [];
+  const byId = new Map(live.map((m) => [m.id, m]));
+  // Most recently traded market first; YES before NO within a market.
+  const recent = [...new Set(fills.map((f) => f.marketId).reverse())];
+  const open: OpenPosition[] = [];
+  for (const marketId of recent) {
+    const m = byId.get(marketId);
+    if (!m) continue;
+    const pool = { yes: D(m.poolYes), no: D(m.poolNo) };
+    for (const side of ["YES", "NO"] as const) {
+      const h = holding(memberId, marketId, side);
+      if (!h.shares.gt(0)) continue;
+      open.push({
+        marketId,
+        question: m.question,
+        closeAt: m.closeAt,
+        side,
+        shares: h.shares,
+        cost: h.cost,
+        value: resaleValue(pool, side, h.shares),
+        percent: displayPercent(pool),
+      });
+    }
+  }
   const closed = settled.map((r): ClosedPosition => {
     const spent = BigInt(r.spent);
     const received = BigInt(r.received);

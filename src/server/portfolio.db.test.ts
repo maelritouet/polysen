@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { quoteSell } from "@/core/amm";
-import { D } from "@/core/money";
+import { D, decimalToCoinsDown } from "@/core/money";
 import { markets } from "@/db/schema";
 import { cleanup, createRootMember, giveCoins, openTestDb } from "@/test/db";
 import { createMarket, cancelMarket } from "./markets";
@@ -55,17 +55,18 @@ describe("the portfolio", () => {
     expect(p.closed).toHaveLength(0);
   });
 
-  it("subtracts sales from the cost and drops positions sold in full", async () => {
+  it("keeps the average cost of the shares still held, and drops positions sold in full", async () => {
     const tom = await member();
     const lea = await member();
     const m = await market(lea);
     const b = await bet(tom, m.id, "YES", 20000n);
     const half = b.shares.div(2).toDecimalPlaces(12);
-    const s = await sell(t.db, tom, { marketId: m.id, side: "YES", shares: half.toFixed(12), requestId: randomUUID() });
+    await sell(t.db, tom, { marketId: m.id, side: "YES", shares: half.toFixed(12), requestId: randomUUID() });
 
     let p = await getPortfolio(t.db, tom);
     expect(p.open).toHaveLength(1);
-    expect(p.open[0].cost).toBe(20000n - s.coins);
+    // Half the shares sold takes half the cost with it (rounded down): the rest stays.
+    expect(p.open[0].cost).toBe(20000n - decimalToCoinsDown(D(200).mul(half).div(b.shares)));
     expect(p.open[0].shares.eq(b.shares.minus(half))).toBe(true);
 
     await sell(t.db, tom, { marketId: m.id, side: "YES", shares: "all", requestId: randomUUID() });

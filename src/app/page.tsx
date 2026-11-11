@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { FeedList } from "@/components/feed-list";
+import { LeaderboardPreview } from "@/components/leaderboard";
 import { MobileTabBar } from "@/components/nav-links";
 import { Gain, PortfolioSummary } from "@/components/portfolio";
 import { formatCoinsFr } from "@/lib/format";
@@ -10,6 +11,7 @@ import { PageSkeleton } from "@/components/page-skeleton";
 import { db } from "@/db";
 import { closingSoon, parseSort, sortMarkets, SORTS, type SortKey } from "@/lib/market-sort";
 import { getFeed } from "@/server/feed";
+import { getLeaderboard } from "@/server/leaderboard";
 import { getMarketStats, getPriceHistories } from "@/server/history";
 import { listVisibleMarkets } from "@/server/markets";
 import { getPortfolio } from "@/server/portfolio";
@@ -20,12 +22,13 @@ import { DropButton } from "./drop-button";
 async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   const sort: SortKey = parseSort((await searchParams).tri);
   const me = await requireMember();
-  const [balance, claimed, markets, feed, portfolio] = await Promise.all([
+  const [balance, claimed, markets, feed, portfolio, board] = await Promise.all([
     getBalance(db, me.id),
     hasClaimedToday(db, me.id),
     listVisibleMarkets(db, me.id),
     getFeed(db, me.id, 15),
     getPortfolio(db, me.id),
+    getLeaderboard(db),
   ]);
   const ids = markets.map((m) => m.id);
   const [histories, stats] = await Promise.all([getPriceHistories(db, ids), getMarketStats(db, ids)]);
@@ -83,6 +86,13 @@ async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">[
           </section>
 
           <section className="lg:hidden">
+            <h2 className="text-lg font-bold">Classement de la semaine</h2>
+            <div className="mt-2">
+              <LeaderboardPreview rows={board.week} meId={me.id} />
+            </div>
+          </section>
+
+          <section className="lg:hidden">
             <h2 className="text-lg font-bold">Fil des potes</h2>
             <div className="mt-2">
               <FeedList events={feed} now={now} meId={me.id} />
@@ -116,6 +126,12 @@ async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">[
               <Gain amount={portfolio.value - portfolio.cost} className="font-semibold" />
             </Link>
           )}
+          <section className="hidden lg:block">
+            <h2 className="text-lg font-bold">Classement de la semaine</h2>
+            <div className="mt-2">
+              <LeaderboardPreview rows={board.week} meId={me.id} />
+            </div>
+          </section>
           <section className="hidden lg:block">
             <h2 className="text-lg font-bold">Fil des potes</h2>
             <div className="mt-2">

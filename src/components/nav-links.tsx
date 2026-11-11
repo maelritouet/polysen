@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 export const NAV = [
   { href: "/", label: "Marchés" },
+  { href: "/classement", label: "Classement" },
   { href: "/portefeuille", label: "Portefeuille" },
 ] as const;
 
@@ -36,18 +37,19 @@ export function MobileTabBar() {
     <Link
       href={href}
       aria-current={isActive(path, href) ? "page" : undefined}
-      className="flex h-12 items-center justify-center rounded-lg text-sm font-semibold text-dim focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:text-ink"
+      className="flex h-12 items-center justify-center rounded-lg text-[13px] font-semibold text-dim focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:text-ink"
     >
       {label}
     </Link>
   );
   return (
     <nav aria-label="Navigation" className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-night/95 backdrop-blur lg:hidden">
-      <div className="mx-auto grid max-w-xl grid-cols-3 items-center gap-2 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto grid max-w-xl grid-cols-4 items-center gap-1 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {tab("/", "Marchés")}
+        {tab("/classement", "Classement")}
         <Link
           href="/marches/nouveau"
-          className="flex h-12 items-center justify-center rounded-xl bg-ink text-sm font-extrabold text-night focus-visible:ring-2 focus-visible:ring-yes focus-visible:outline-none"
+          className="flex h-12 items-center justify-center rounded-xl bg-ink text-[13px] font-extrabold text-night focus-visible:ring-2 focus-visible:ring-yes focus-visible:outline-none"
         >
           + Question
         </Link>
