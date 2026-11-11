@@ -66,7 +66,14 @@ export async function insertTestMarket(db: Db, creatorId: string, closeAt = new 
  * Inserts a buy straight into `trades` and moves the market's pool with the
  * core's quote, bypassing the server functions (no ledger rows). Schema tests only.
  */
-export async function insertTestBuy(db: Db, marketId: string, memberId: string, side: Side, coins: bigint): Promise<void> {
+export async function insertTestBuy(
+  db: Db,
+  marketId: string,
+  memberId: string,
+  side: Side,
+  coins: bigint,
+  opts: { withLedger?: boolean } = {},
+): Promise<void> {
   const [m] = await db.select({ yes: markets.poolYes, no: markets.poolNo }).from(markets).where(sql`${markets.id} = ${marketId}`);
   const q = quoteBuy({ yes: D(m.yes), no: D(m.no) }, side, coins);
   await db.insert(trades).values({
@@ -84,6 +91,12 @@ export async function insertTestBuy(db: Db, marketId: string, memberId: string, 
     .update(markets)
     .set({ poolYes: q.pool.yes.toFixed(12), poolNo: q.pool.no.toFixed(12) })
     .where(sql`${markets.id} = ${marketId}`);
+  if (opts.withLedger) await db.insert(ledger).values({ memberId, amount: -coins, reason: "bet", marketId });
+}
+
+/** Gives a test member coins with a grant row. */
+export async function giveCoins(db: Db, memberId: string, amount: bigint): Promise<void> {
+  await db.insert(ledger).values({ memberId, amount, reason: "grant" });
 }
 
 /** Deletes everything the test users created, then the users themselves. */
