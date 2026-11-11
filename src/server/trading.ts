@@ -125,12 +125,22 @@ export async function buy(db: Db, memberId: string, input: BuyInput, now: Date =
   });
 }
 
-async function heldShares(db: Db | Tx, marketId: string, memberId: string, side: Side): Promise<Dec> {
+export async function heldShares(db: Db | Tx, marketId: string, memberId: string, side: Side): Promise<Dec> {
   const [p] = await db
     .select({ yes: positions.yes, no: positions.no })
     .from(positions)
     .where(and(eq(positions.marketId, marketId), eq(positions.memberId, memberId)));
   return p ? D(side === "YES" ? p.yes : p.no) : D(0);
+}
+
+/**
+ * The share count for a percentage of what is held (the sell slider), rounded
+ * down to 12 decimals. 100% is "all": exactly the shares held, nothing left over.
+ */
+export function sharesForPercent(percent: number, held: Dec): string {
+  if (!Number.isInteger(percent) || percent < 1 || percent > 100) throw new UserError("Pourcentage invalide.");
+  if (percent === 100) return "all";
+  return held.mul(percent).div(100).toDecimalPlaces(SHARE_DECIMALS, Decimal.ROUND_DOWN).toString();
 }
 
 function parseShares(text: string, held: Dec): Dec {
