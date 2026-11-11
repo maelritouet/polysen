@@ -19,3 +19,8 @@ export function formatSharesFr(shares: { toFixed(dp: number, rm?: number): strin
   const [whole, fraction] = shares.toFixed(2, 1 /* ROUND_DOWN */).split(".");
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP)},${fraction}`;
 }
+
+/** Whole coins, rounded down, grouped: "1 234". For volumes, where hundredths are noise. */
+export function formatWholeCoinsFr(amount: Coins): string {
+  return (amount / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP);
+}

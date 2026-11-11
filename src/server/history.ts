@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { markets, profiles, trades } from "@/db/schema";
 
@@ -70,4 +70,33 @@ export async function getActivity(db: Db, marketId: string, limit = 30): Promise
     .orderBy(desc(trades.id))
     .limit(limit);
   return rows.map((r) => ({ ...r, id: r.id.toString() }));
+}
+
+export interface MarketStats {
+  /** Coins traded, bets and sales, in hundredths. */
+  volume: bigint;
+  /** The same over the last 24 hours: what "Tendance" ranks by. */
+  volume24h: bigint;
+  /** Distinct members who traded. */
+  players: number;
+}
+
+/** Volume and player counts for a set of markets, in one grouped query. */
+export async function getMarketStats(db: Db, marketIds: string[], now: Date = new Date()): Promise<Map<string, MarketStats>> {
+  const out = new Map<string, MarketStats>();
+  for (const id of marketIds) out.set(id, { volume: 0n, volume24h: 0n, players: 0 });
+  if (!marketIds.length) return out;
+  const since = new Date(now.getTime() - 86_400_000);
+  const rows = await db
+    .select({
+      marketId: trades.marketId,
+      volume: sql<string>`sum(${trades.coins})`,
+      volume24h: sql<string>`coalesce(sum(${trades.coins}) filter (where ${trades.createdAt} > ${since.toISOString()}::timestamptz), 0)`,
+      players: sql<number>`count(distinct ${trades.memberId})::int`,
+    })
+    .from(trades)
+    .where(inArray(trades.marketId, marketIds))
+    .groupBy(trades.marketId);
+  for (const r of rows) out.set(r.marketId, { volume: BigInt(r.volume), volume24h: BigInt(r.volume24h), players: r.players });
+  return out;
 }

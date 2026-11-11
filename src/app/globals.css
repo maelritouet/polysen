@@ -152,3 +152,8 @@
     }
   }
 }
+/* Horizontal strips (e.g. "Ferment bientôt"): a thin scrollbar in the theme's line colour. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}

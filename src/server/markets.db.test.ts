@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { MARKET_SEED } from "@/core/ledger";
-import { ledger, marketTags, profiles } from "@/db/schema";
+import { ledger, marketTags, profiles, trades } from "@/db/schema";
 import { cleanup, createRootMember, giveCoins, insertTestBuy, openTestDb } from "@/test/db";
 import {
   createMarket,
@@ -215,5 +215,25 @@ describe("price history", () => {
     expect(points[2].p).toBeLessThan(0.8);
     expect(probabilityAt(points, points[0].t - 1)).toBeNull();
     expect(probabilityAt(points, Date.now() + 1000)).toBe(points[2].p);
+  });
+});
+
+describe("market stats for discovery", () => {
+  it("counts volume (bets and sales), 24-hour volume and distinct players", async () => {
+    const { getMarketStats } = await import("./history");
+    const lea = await member(30000n);
+    const tom = await member(50000n);
+    const sam = await member(50000n);
+    const m = await createMarket(t.db, lea, input({ closeAt: new Date(Date.now() + 48 * HOUR) }));
+    const quiet = await createMarket(t.db, lea, input({ closeAt: new Date(Date.now() + 48 * HOUR) }));
+    await insertTestBuy(t.db, m.id, tom, "YES", 10000n);
+    await insertTestBuy(t.db, m.id, tom, "NO", 2000n);
+    await insertTestBuy(t.db, m.id, sam, "YES", 500n);
+    // One old trade: counts in total volume, not in the last 24 hours.
+    await t.db.update(trades).set({ createdAt: new Date(Date.now() - 30 * HOUR) }).where(and(eq(trades.marketId, m.id), eq(trades.coins, 500n)));
+
+    const stats = await getMarketStats(t.db, [m.id, quiet.id]);
+    expect(stats.get(m.id)).toEqual({ volume: 12500n, volume24h: 12000n, players: 2 });
+    expect(stats.get(quiet.id)).toEqual({ volume: 0n, volume24h: 0n, players: 0 });
   });
 });
