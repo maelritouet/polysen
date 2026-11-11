@@ -54,53 +54,105 @@ describe("the book", () => {
   });
 });
 
-describe("rule 8: a winning share pays exactly 1 coin, a losing share pays 0", () => {
-  it("pays each winner their shares, rounded down to the hundredth", () => {
+/** A winner's base payout: 1 coin per share, rounded down to the hundredth. */
+const base = (shares: ReturnType<typeof D>) => BigInt(shares.mul(100).floor().toFixed(0));
+
+describe("rule 8: a winning share pays at least 1 coin, a losing share pays 0", () => {
+  it("when the crowd was right, pays each winner exactly their shares, rounded down", () => {
     const b = book([
       ["lea", "buy", "YES", 10000n],
-      ["tom", "buy", "NO", 10000n],
+      ["tom", "buy", "NO", 3000n],
     ]);
     const lea = b.positions.get("lea")!;
     const ts = resolvePayouts(b, "YES");
-    expect(to(ts, "lea", "payout")).toBe(BigInt(lea.yes.mul(100).floor().toFixed(0)));
+    expect(to(ts, "lea", "payout")).toBe(base(lea.yes));
+    expect(to(ts, "tom")).toBe(0n);
+  });
+
+  it("when the crowd was wrong, pays each winner their shares plus a share of the surplus", () => {
+    const b = book([
+      ["tom", "buy", "YES", 30000n],
+      ["sam", "buy", "NO", 2000n],
+    ]);
+    const sam = b.positions.get("sam")!;
+    const ts = resolvePayouts(b, "NO");
+    expect(to(ts, "sam", "payout")).toBeGreaterThan(base(sam.no));
     expect(to(ts, "tom")).toBe(0n);
   });
 });
 
 describe("rule 12 (settlement): every coin in the market is paid out, to the hundredth", () => {
-  it("on a YES resolution", () => {
+  it("on a YES resolution and on a NO resolution (the creator bonus is new coins, not market coins)", () => {
     const b = book([
       ["lea", "buy", "YES", 12345n],
       ["tom", "buy", "NO", 6789n],
       ["hugo", "buy", "YES", 1n],
     ]);
-    expect(total(resolvePayouts(b, "YES"))).toBe(coinsIn(b));
-    expect(total(resolvePayouts(b, "NO"))).toBe(coinsIn(b));
+    for (const outcome of ["YES", "NO"] as const) {
+      const market = resolvePayouts(b, outcome).filter((t) => t.reason !== "creator_bonus");
+      expect(total(market)).toBe(coinsIn(b));
+    }
   });
 });
 
-describe("rule 13: the creator receives the pool's leftover winning shares", () => {
-  it("the creator gets the pool's shares plus rounding dust, as a seed return", () => {
+describe("rule 13: the creator gets back at most their seed plus 1% of what the crowd lost", () => {
+  it("Mael's example: Tom bets 300 on YES, Sam 20 on NO, NO wins", () => {
     const b = book([
-      ["lea", "buy", "YES", 10000n],
-      ["tom", "buy", "NO", 3000n],
+      ["tom", "buy", "YES", 30000n],
+      ["sam", "buy", "NO", 2000n],
     ]);
+    const sam = b.positions.get("sam")!;
+    const leftover = coinsIn(b) - base(sam.no); // what the pool holds for the creator today
+    const surplus = leftover - SEED;
+    const ts = resolvePayouts(b, "NO");
+    expect(to(ts, "creator", "seed_return")).toBe(SEED + surplus / 100n);
+    expect(to(ts, "sam", "payout")).toBe(base(sam.no) + surplus - surplus / 100n);
+    // About 101.22 for the creator and 318.78 for Sam.
+    expect(to(ts, "creator", "seed_return")).toBe(10122n);
+    expect(to(ts, "sam", "payout")).toBe(31878n);
+  });
+
+  it("when the crowd was right, the creator gets the pool's leftovers, less than the seed", () => {
+    const b = book([["lea", "buy", "YES", 50000n]]);
+    const lea = b.positions.get("lea")!;
     const ts = resolvePayouts(b, "YES");
+    expect(to(ts, "creator", "seed_return")).toBe(coinsIn(b) - base(lea.yes));
+    expect(to(ts, "creator", "seed_return")).toBeLessThan(SEED);
+  });
+
+  it("several winners split the surplus in proportion to their winning shares", () => {
+    const b = book([
+      ["lea", "buy", "YES", 3000n],
+      ["hugo", "buy", "YES", 1000n],
+      ["tom", "buy", "NO", 40000n],
+    ]);
+    const lea = b.positions.get("lea")!;
+    const hugo = b.positions.get("hugo")!;
+    const ts = resolvePayouts(b, "YES");
+    const leaExtra = to(ts, "lea", "payout") - base(lea.yes);
+    const hugoExtra = to(ts, "hugo", "payout") - base(hugo.yes);
+    expect(leaExtra).toBeGreaterThan(0n);
+    expect(hugoExtra).toBeGreaterThan(0n);
+    // Same ratio as their shares, within a hundredth of rounding.
+    const expectedLea = D(hugoExtra.toString()).mul(lea.yes).div(hugo.yes);
+    expect(D(leaExtra.toString()).minus(expectedLea).abs().lte(2)).toBe(true);
+    const leftover = coinsIn(b) - base(lea.yes) - base(hugo.yes);
     const back = to(ts, "creator", "seed_return");
-    const poolValue = b.pool.yes.mul(100);
-    // At least the pool's shares, and less than a hundredth per winner more.
-    expect(D(back.toString()).gte(poolValue.floor())).toBe(true);
-    expect(D(back.toString()).lte(poolValue.ceil().plus(2))).toBe(true);
+    expect(back).toBeGreaterThanOrEqual(SEED + (leftover - SEED) / 100n);
+    expect(back).toBeLessThanOrEqual(SEED + (leftover - SEED) / 100n + 2n); // + rounding dust
   });
 
-  it("can be more than the 100-coin seed when the crowd was wrong", () => {
-    const b = book([["lea", "buy", "YES", 50000n]]);
-    expect(to(resolvePayouts(b, "NO"), "creator", "seed_return")).toBeGreaterThan(SEED);
-  });
-
-  it("can be less than the 100-coin seed when the crowd was right", () => {
-    const b = book([["lea", "buy", "YES", 50000n]]);
-    expect(to(resolvePayouts(b, "YES"), "creator", "seed_return")).toBeLessThan(SEED);
+  it("if nobody holds a winning share, the surplus goes back to the players in proportion to what they put in", () => {
+    const b = book([
+      ["tom", "buy", "YES", 30000n],
+      ["lea", "buy", "YES", 10000n],
+    ]);
+    const ts = resolvePayouts(b, "NO");
+    const surplus = coinsIn(b) - SEED; // nobody won, so the pool holds every coin
+    const toPlayers = surplus - surplus / 100n;
+    expect(to(ts, "creator", "seed_return")).toBe(SEED + surplus / 100n);
+    expect(to(ts, "tom", "refund")).toBe((toPlayers * 30000n) / 40000n);
+    expect(to(ts, "lea", "refund")).toBe((toPlayers * 10000n) / 40000n);
   });
 
   it("a creator who also bets gets their payout and their seed return as separate lines", () => {
@@ -108,6 +160,43 @@ describe("rule 13: the creator receives the pool's leftover winning shares", () 
     const ts = resolvePayouts(b, "YES");
     expect(to(ts, "creator", "payout")).toBeGreaterThan(0n);
     expect(to(ts, "creator", "seed_return")).toBeGreaterThan(0n);
+  });
+});
+
+describe("rule 14: the creator bonus is 1% of bets minus sales, paid at resolution", () => {
+  it("pays 1% of every player's bets, the creator's own included", () => {
+    const b = book([
+      ["lea", "buy", "YES", 10000n],
+      ["tom", "buy", "NO", 5050n],
+      ["creator", "buy", "YES", 2000n],
+    ]);
+    expect(to(resolvePayouts(b, "YES"), "creator", "creator_bonus")).toBe(170n); // 1% of 170.50, rounded down
+  });
+
+  it("buying then selling straight back earns the creator nothing", () => {
+    const b = book([
+      ["tom", "buy", "YES", 100000n],
+      ["tom", "sell", "YES", "all"],
+    ]);
+    expect(to(resolvePayouts(b, "YES"), "creator", "creator_bonus")).toBe(0n);
+  });
+
+  it("no bonus when everyone has sold out: only rounding dust is left in", () => {
+    const b = book([
+      ["lea", "buy", "YES", 10000n],
+      ["tom", "buy", "YES", 40000n],
+      ["lea", "sell", "YES", "all"],
+      ["tom", "sell", "YES", "all"],
+    ]);
+    // The pool always keeps at least the seed's worth (√(yes × no) ≥ 100), so
+    // bets − sales never goes below zero; here it is a hundredth of dust.
+    expect(coinsIn(b) - SEED).toBeLessThan(100n);
+    expect(to(resolvePayouts(b, "YES"), "creator", "creator_bonus")).toBe(0n);
+  });
+
+  it("a cancelled market pays no bonus", () => {
+    const b = book([["tom", "buy", "YES", 30000n]]);
+    expect(to(cancelRefunds(b, new Map()), "creator", "creator_bonus")).toBe(0n);
   });
 });
 

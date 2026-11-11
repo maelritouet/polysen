@@ -16,7 +16,7 @@ Amounts are in coins, stored as hundredths (0.01) and shown with two decimals.
 ## Nobody creates coins
 
 7. **Trading never creates coins.** Players together can never take more out of a market than the creator's 100-coin seed. (Corrected 2026-11-10: "at most what they put in" was too strict, because winners are paid from the creator's seed. See decision 003.)
-8. **A winning share pays exactly 1 coin; a losing share pays 0.**
+8. **A winning share pays at least 1 coin; a losing share pays 0.** A winner gets more than 1 coin per share when the crowd lost coins to the pool (rule 13). (Changed 2026-11-11, decision 007.)
 9. **A cancelled market refunds every player exactly what they put in**, and refunds the creator their 100-coin seed. A player who already sold at a profit gives that profit back, but never below a zero balance; what can't be taken back comes out of the creator's seed (decision 004).
 10. **Tiny trades can't farm rounding.** Thousands of 0.01-coin trades never earn more than one big trade of the same total. Rounding always goes in the pool's favour: no trade lowers the pool's product `yes × no` (a sale by at most one millionth of a coin, see decision 001).
 
@@ -29,11 +29,15 @@ Each sequence mixes random buys, sales, resolutions (YES / NO) and cancellations
 
 ## The creator's seed
 
-13. **At resolution the creator receives exactly the pool's leftover winning shares**, plus any rounding dust. This can be more or less than 100. It never counts as trading profit on the leaderboard.
+13. **The creator never profits from the pool beyond 1%.** At resolution, after each winner gets 1 coin per share, the pool holds L coins. If L is at most 100, the crowd was right and the creator gets L back (and loses the rest of the seed). If L is more than 100, the crowd lost S = L − 100: the creator gets 100 + 1% of S, and the rest of S goes to the winners in proportion to their winning shares. If nobody won, it goes back to the players in proportion to what they put in. A seed return never counts as trading profit on the leaderboard. (Changed 2026-11-11, decision 007.)
+
+## The creator bonus
+
+14. **The creator bonus is 1% of every bet minus every sale on the market**, everyone's bets included (the creator's too), with no cap. It is paid once, when the market resolves: never on a cancel, and never on a result that gets overturned. Buying and selling straight back earns the creator nothing. It never counts as trading profit. (Decided 2026-11-11, decision 007.)
 
 ## Decided on 2026-11-10
 
-- Seed: the creator pays 100 coins to open the pool, and gets the pool's leftovers back at resolution (rule 13), or 100 on cancel (rule 9).
+- Seed: the creator pays 100 coins to open the pool, and gets back at most 100 + 1% of what the crowd lost at resolution (rule 13, changed 2026-11-11), or 100 on cancel (rule 9).
 - Amounts are stored as whole hundredths and shown with two decimals.
 - Market maker: a constant-product market maker like Manifold's, with p = 0.5, starting at 100 YES / 100 NO shares (50%).
 
@@ -43,7 +47,7 @@ Each sequence mixes random buys, sales, resolutions (YES / NO) and cancellations
 | --- | --- |
 | 1–6 | `src/core/amm.test.ts` |
 | 7, 11, 12 | `src/core/invariants.test.ts` (10,000 random games, checked after every step) |
-| 8, 9, 13 | `src/core/settlement.test.ts`, plus rule 8 inside the random games |
+| 8, 9, 13, 14 | `src/core/settlement.test.ts`, plus rules 8, 13 and 14 inside the random games |
 | 10 | `src/core/amm.test.ts` (pool side) and `src/core/invariants.test.ts` (tiny trades) |
 | 13 (leaderboard) | `src/core/ledger.test.ts` |
 
