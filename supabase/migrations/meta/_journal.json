@@ -22,6 +22,13 @@
       "when": 1794397452938,
       "tag": "20261111114412_markets_and_trades",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794437692001,
+      "tag": "20261111225451_comments",
+      "breakpoints": true
     }
   ]
 }

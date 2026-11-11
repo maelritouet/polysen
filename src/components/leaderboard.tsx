@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Row } from "@/server/leaderboard";
 import { Gain } from "./portfolio";
 
-const MEDAL = ["text-[#f5c451]", "text-[#c9d3df]", "text-[#d99a6c]"];
+const MEDAL = ["text-gold", "text-[#c9d3df]", "text-[#d99a6c]"];
 
 function RankCell({ rank }: { rank: number }) {
   return <span className={`w-7 shrink-0 text-right font-extrabold tabular-nums ${MEDAL[rank - 1] ?? "text-dim"}`}>{rank}</span>;

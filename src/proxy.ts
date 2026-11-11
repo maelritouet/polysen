@@ -8,7 +8,8 @@ import { supabaseEnv } from "@/lib/env";
  * security boundary: every server action checks the session itself.
  */
 
-const PUBLIC_PATHS = ["/connexion", "/invitation/"];
+// The manifest is fetched without cookies, so it must not redirect to sign-in.
+const PUBLIC_PATHS = ["/connexion", "/invitation/", "/manifest.webmanifest"];
 
 export async function proxy(request: NextRequest) {
   const { url, key } = supabaseEnv();

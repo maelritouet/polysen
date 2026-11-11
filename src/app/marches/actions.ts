@@ -6,6 +6,7 @@ import type { Side } from "@/core/amm";
 import { db } from "@/db";
 import { formatCoinsFr, formatSharesFr } from "@/lib/format";
 import { parisLocalToDate } from "@/lib/paris-time";
+import { addComment, deleteMyComment } from "@/server/comments";
 import { isUserError } from "@/server/errors";
 import { createMarket, getVisibleMarket, removeMyMarket, respondToTag } from "@/server/markets";
 import { requireMember } from "@/server/session";
@@ -138,4 +139,28 @@ export async function sellAction(marketId: string, side: Side, percent: number, 
   } catch (err) {
     return userErrorOr(err);
   }
+}
+
+export async function addCommentAction(marketId: string, text: string): Promise<FormState> {
+  const me = await requireMember();
+  try {
+    await addComment(db, me.id, marketId, text);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function deleteCommentAction(commentId: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(commentId)) return { error: "Message introuvable." };
+  let marketId: string;
+  try {
+    marketId = await deleteMyComment(db, me.id, BigInt(commentId));
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
 }

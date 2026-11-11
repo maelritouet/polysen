@@ -184,6 +184,28 @@ export const trades = pgTable(
   ],
 ).enableRLS();
 
+/** A market's comment thread. Deleting (by its author, or the admin in phase 5) only hides the text. */
+export const comments = pgTable(
+  "comments",
+  {
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    marketId: uuid("market_id")
+      .notNull()
+      .references(() => markets.id, { onDelete: "restrict" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("comments_market_idx").on(t.marketId, t.id),
+    index("comments_member_created_idx").on(t.memberId, t.createdAt),
+    check("comments_body_len", sql`char_length(${t.body}) between 1 and 500`),
+  ],
+).enableRLS();
+
 /**
  * Each member's position in each market, summed from their trades.
  * `invested` = coins bet − coins received from sales (core's Position.invested).

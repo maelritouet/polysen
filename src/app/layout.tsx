@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -10,6 +10,13 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Poly'sen",
   description: "Le marché de prédiction entre potes. Pour de faux, mais pour de vrai.",
+  appleWebApp: { capable: true, title: "Poly'sen", statusBarStyle: "black" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f1b2d",
+  viewportFit: "cover",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

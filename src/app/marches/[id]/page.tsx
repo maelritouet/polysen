@@ -6,17 +6,20 @@ import { BetSheet } from "@/components/market/bet-sheet";
 import { PriceChart } from "@/components/market/price-chart";
 import { SellButton } from "@/components/market/sell-button";
 import { PageSkeleton } from "@/components/page-skeleton";
+import { SideChip } from "@/components/portfolio";
 import type { Side } from "@/core/amm";
 import { D, decimalToCoinsDown } from "@/core/money";
 import { db } from "@/db";
 import { formatCoinsFr, formatSharesFr } from "@/lib/format";
 import { ago, closesIn } from "@/lib/format-time";
 import { formatParis } from "@/lib/paris-time";
+import { getInsiders, listComments } from "@/server/comments";
 import { getActivity, getPriceHistory } from "@/server/history";
 import { getMarketDetails } from "@/server/markets";
 import { requireMember } from "@/server/session";
 import { quoteSellFor } from "@/server/trading";
 import { getBalance } from "@/server/wallet";
+import { CommentForm, DeleteComment } from "./comments";
 import { TagControls } from "./tag-controls";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,10 +31,12 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
   if (!UUID.test(id)) notFound();
   const m = await getMarketDetails(db, me.id, id);
   if (!m) notFound();
-  const [balance, history, activity] = await Promise.all([
+  const [balance, history, activity, thread, insiders] = await Promise.all([
     getBalance(db, me.id),
     getPriceHistory(db, id),
     getActivity(db, id),
+    listComments(db, me.id, id),
+    getInsiders(db, id),
   ]);
   const now = m.asOf.getTime();
 
@@ -77,6 +82,21 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
               <span title={formatParis(m.closeAt)}>{m.status === "open" ? closesIn(m.closeAt, now) : closedReason}</span>
             </p>
             <h1 className="mt-2 text-2xl leading-tight font-bold text-balance lg:text-3xl">{m.question}</h1>
+            {insiders.length > 0 && (
+              <ul className="mt-3 flex flex-wrap gap-2" aria-label="Initiés qui ont parié">
+                {insiders.map((i) => (
+                  <li
+                    key={i.memberId}
+                    title="Cette personne peut en savoir plus que les autres sur ce marché."
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-xs font-semibold text-gold"
+                  >
+                    <span aria-hidden>👁</span>
+                    {i.memberId === me.id ? "Toi" : `@${i.nickname}`} ({i.role === "creator" ? "créateur" : "nommé·e"}) a parié{" "}
+                    {i.sides.map((s) => LABEL[s].toLowerCase()).join(" et ")}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <PriceChart points={history} now={now} end={now} />
@@ -119,6 +139,42 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
                   .map((t) => `@${t.nickname}${t.status === "pending" ? " (en attente)" : t.status === "refused" ? " (a refusé)" : ""}`)
                   .join(", ")}
               </p>
+            )}
+          </section>
+
+          <section>
+            <h2 className="font-bold">
+              Discussion{thread.length > 0 && <span className="ml-1.5 font-normal text-dim">{thread.length}</span>}
+            </h2>
+            {(m.status === "open" || m.status === "pending_approval") && (
+              <div className="mt-2">
+                <CommentForm marketId={m.id} />
+              </div>
+            )}
+            {thread.length === 0 ? (
+              <p className="mt-2 text-sm text-dim">Personne n&apos;a encore rien dit.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-line">
+                {thread.map((c) => (
+                  <li key={c.id.toString()} className="py-3 text-sm">
+                    <p className="flex flex-wrap items-center gap-x-2">
+                      <span className="font-semibold">@{c.nickname}</span>
+                      {c.holding && <SideChip side={c.holding} />}
+                      <span className="text-xs text-dim">{ago(c.createdAt, now)}</span>
+                      {c.memberId === me.id && c.body !== null && (
+                        <span className="ml-auto">
+                          <DeleteComment id={c.id.toString()} />
+                        </span>
+                      )}
+                    </p>
+                    {c.body === null ? (
+                      <p className="mt-1 text-dim italic">Message supprimé.</p>
+                    ) : (
+                      <p className="mt-1 break-words whitespace-pre-line">{c.body}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 

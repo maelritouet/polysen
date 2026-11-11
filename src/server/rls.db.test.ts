@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, createRootMember, insertTestBuy, insertTestMarket, openTestDb } from "@/test/db";
-import { marketTags } from "@/db/schema";
+import { comments, marketTags } from "@/db/schema";
 import { claimDailyDrop } from "./wallet";
 
 /**
@@ -14,7 +14,7 @@ import { claimDailyDrop } from "./wallet";
  * table, and no table privileges for the API roles at all.
  */
 
-const TABLES = ["profiles", "ledger", "daily_claims", "markets", "market_tags", "trades", "positions"] as const;
+const TABLES = ["profiles", "ledger", "daily_claims", "markets", "market_tags", "trades", "positions", "comments"] as const;
 type Table = (typeof TABLES)[number];
 
 /** The column that points at the victim in each table. */
@@ -26,6 +26,7 @@ const OWNER: Record<Table, string> = {
   market_tags: "member_id",
   trades: "member_id",
   positions: "member_id",
+  comments: "member_id",
 };
 
 /** What an attacker would try to write. Untyped on purpose: they send whatever JSON they like. */
@@ -41,6 +42,8 @@ function attackRow(table: Table, victimId: string): Record<string, unknown> {
       return { creator_id: victimId, question: "Hacked?", criteria: "yes", close_at: "2099-01-01", status: "open", seed: 1, pool_yes: 1, pool_no: 1 };
     case "market_tags":
       return { market_id: "00000000-0000-0000-0000-000000000000", member_id: victimId, status: "approved" };
+    case "comments":
+      return { member_id: victimId, market_id: "00000000-0000-0000-0000-000000000000", body: "hacked" };
     case "trades":
     case "positions":
       return { member_id: victimId, market_id: "00000000-0000-0000-0000-000000000000", side: "YES", kind: "sell", coins: 99999900, shares: 1 };
@@ -55,6 +58,7 @@ const ATTACK_UPDATE: Record<Table, Record<string, unknown>> = {
   market_tags: { status: "approved" },
   trades: { coins: 99999900 },
   positions: { invested: -99999900 },
+  comments: { body: "hacked" },
 };
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -75,6 +79,7 @@ beforeAll(async () => {
   const marketId = await insertTestMarket(t.db, victimId);
   await insertTestBuy(t.db, marketId, victimId, "YES", 1000n);
   await t.db.insert(marketTags).values({ marketId, memberId: victimId });
+  await t.db.insert(comments).values({ marketId, memberId: victimId, body: "Hello" });
 
   anon = createClient(url, key, { auth: { persistSession: false } });
 
