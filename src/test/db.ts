@@ -5,7 +5,7 @@ import { newPool, quoteBuy, type Side } from "@/core/amm";
 import { MARKET_SEED } from "@/core/ledger";
 import { D } from "@/core/money";
 import { createDb, type Db } from "@/db/client";
-import { comments, dailyClaims, ledger, markets, marketTags, profiles, trades } from "@/db/schema";
+import { comments, dailyClaims, disputes, resolutions, ledger, markets, marketTags, profiles, trades } from "@/db/schema";
 
 /**
  * Helpers for tests that run against the local Supabase database
@@ -106,6 +106,9 @@ export async function cleanup(db: Db, users: Set<string>): Promise<void> {
   const theirMarkets = db.select({ id: markets.id }).from(markets).where(inArray(markets.creatorId, ids));
   await db.delete(dailyClaims).where(inArray(dailyClaims.memberId, ids));
   await db.delete(ledger).where(or(inArray(ledger.memberId, ids), inArray(ledger.marketId, theirMarkets)));
+  const theirResolutions = db.select({ id: resolutions.id }).from(resolutions).where(or(inArray(resolutions.proposedBy, ids), inArray(resolutions.marketId, theirMarkets)));
+  await db.delete(disputes).where(or(inArray(disputes.memberId, ids), inArray(disputes.resolutionId, theirResolutions)));
+  await db.delete(resolutions).where(or(inArray(resolutions.proposedBy, ids), inArray(resolutions.marketId, theirMarkets)));
   await db.delete(comments).where(or(inArray(comments.memberId, ids), inArray(comments.marketId, theirMarkets)));
   await db.delete(trades).where(or(inArray(trades.memberId, ids), inArray(trades.marketId, theirMarkets)));
   await db.delete(marketTags).where(or(inArray(marketTags.memberId, ids), inArray(marketTags.marketId, theirMarkets)));

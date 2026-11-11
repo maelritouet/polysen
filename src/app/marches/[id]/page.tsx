@@ -15,11 +15,13 @@ import { ago, closesIn } from "@/lib/format-time";
 import { formatParis } from "@/lib/paris-time";
 import { getInsiders, listComments } from "@/server/comments";
 import { getActivity, getPriceHistory } from "@/server/history";
+import { getResolution } from "@/server/resolution";
 import { getMarketDetails } from "@/server/markets";
 import { requireMember } from "@/server/session";
 import { quoteSellFor } from "@/server/trading";
 import { getBalance } from "@/server/wallet";
 import { CommentForm, DeleteComment } from "./comments";
+import { DisputeForm, ProposeForm } from "./resolution-forms";
 import { TagControls } from "./tag-controls";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,12 +33,13 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
   if (!UUID.test(id)) notFound();
   const m = await getMarketDetails(db, me.id, id);
   if (!m) notFound();
-  const [balance, history, activity, thread, insiders] = await Promise.all([
+  const [balance, history, activity, thread, insiders, resolution] = await Promise.all([
     getBalance(db, me.id),
     getPriceHistory(db, id),
     getActivity(db, id),
     listComments(db, me.id, id),
     getInsiders(db, id),
+    getResolution(db, id),
   ]);
   const now = m.asOf.getTime();
 
@@ -57,10 +60,17 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
     m.status === "pending_approval"
       ? "En attente de l'accord des personnes nommées."
       : m.status === "open"
-        ? "Les paris sont fermés. Résultat bientôt."
+        ? resolution?.status === "disputed"
+          ? "Résultat contesté : l'admin tranche."
+          : resolution?.status === "proposed"
+            ? "Résultat proposé, en attente des contestations."
+            : "Les paris sont fermés. Résultat bientôt."
         : m.status === "cancelled"
           ? "Marché annulé : tout le monde a été remboursé."
-          : "Marché résolu.";
+          : `Résolu : ${resolution?.outcome === "NO" ? "non" : "oui"}.`;
+  const live = resolution && (resolution.status === "proposed" || resolution.status === "disputed") ? resolution : null;
+  const hoursLeft = live ? Math.max(1, Math.ceil((live.paysAt.getTime() - now) / 3_600_000)) : 0;
+  const OUTCOME = { YES: "Oui", NO: "Non", CANCEL: "Annulation" } as const;
 
   const trade = {
     marketId: m.id,
@@ -105,7 +115,47 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
             <TagControls marketId={m.id} canRespond={m.status === "pending_approval" && myTag.status === "pending"} />
           )}
 
-          {sides.length > 0 && (
+          {m.status === "open" && m.bettingClosed && (
+            <section className={`rounded-xl border p-4 ${live?.status === "disputed" ? "border-no/50" : "border-gold/50"}`}>
+              <h2 className="font-bold">Résultat</h2>
+              {!live ? (
+                m.creator.id === me.id ? (
+                  <>
+                    <p className="mt-1 text-sm text-dim">
+                      Les paris sont fermés. Propose le résultat avec une preuve : il sera payé 24 h plus tard si personne ne le conteste.
+                    </p>
+                    <ProposeForm marketId={m.id} />
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-dim">Les paris sont fermés. @{m.creator.nickname} doit proposer le résultat.</p>
+                )
+              ) : (
+                <div className="mt-2 flex flex-col gap-3 text-sm">
+                  <p>
+                    <span className="text-dim">Proposé par @{m.creator.nickname} :</span>{" "}
+                    <span className={`font-extrabold ${live.outcome === "YES" ? "text-yes" : live.outcome === "NO" ? "text-no" : ""}`}>
+                      {OUTCOME[live.outcome]}
+                    </span>
+                  </p>
+                  <p className="break-words whitespace-pre-line text-dim">Preuve : {live.proof}</p>
+                  {live.status === "disputed" ? (
+                    <p className="font-semibold text-no">
+                      Contesté ({live.disputes}). Pas de paiement tant que l&apos;admin n&apos;a pas tranché.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-dim">
+                        Paiement automatique dans {hoursLeft} h ({formatParis(live.paysAt)}), sauf contestation.
+                      </p>
+                      {m.mine && m.creator.id !== me.id && <DisputeForm resolutionId={live.id.toString()} />}
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {sides.length > 0 && m.status === "open" && (
             <section className="rounded-xl border border-line p-4">
               <h2 className="font-bold">Ta position</h2>
               <ul className="mt-3 space-y-3">

@@ -144,7 +144,7 @@ export async function respondToTag(db: Db, memberId: string, marketId: string, a
       .where(and(eq(marketTags.marketId, marketId), eq(marketTags.memberId, memberId)));
 
     if (!approve) {
-      await cancelMarket(tx, marketId);
+      await cancelMarket(tx, marketId, now);
       return;
     }
     const [waiting] = await tx
@@ -176,7 +176,7 @@ export async function removeMyMarket(db: Db, memberId: string, marketId: string,
       .update(marketTags)
       .set({ status: "refused", respondedAt: now })
       .where(and(eq(marketTags.marketId, marketId), eq(marketTags.memberId, memberId)));
-    await cancelMarket(tx, marketId);
+    await cancelMarket(tx, marketId, now);
   });
 }
 
@@ -187,7 +187,7 @@ export async function removeMyMarket(db: Db, memberId: string, marketId: string,
  * Players are locked in id order, the same order trading uses after the
  * market lock, so two cancels or a cancel and a bet can't deadlock.
  */
-export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
+export async function cancelMarket(tx: Tx, marketId: string, now: Date = new Date()): Promise<void> {
   const book = await loadBook(tx, marketId);
   if (!book) throw new Error(`Unknown market ${marketId}`);
   const players = [...book.positions.keys()].sort();
@@ -198,9 +198,9 @@ export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
   }
   const rows = cancelRefunds(book, balances)
     .filter((t) => t.amount !== 0n)
-    .map((t) => ({ memberId: t.memberId, amount: t.amount, reason: t.reason, marketId }));
+    .map((t) => ({ memberId: t.memberId, amount: t.amount, reason: t.reason, marketId, createdAt: now }));
   if (rows.length) await tx.insert(ledger).values(rows);
-  await tx.update(markets).set({ status: "cancelled" }).where(eq(markets.id, marketId));
+  await tx.update(markets).set({ status: "cancelled", settledAt: now }).where(eq(markets.id, marketId));
 }
 
 export interface MarketSummary {

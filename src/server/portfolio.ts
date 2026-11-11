@@ -26,6 +26,8 @@ export interface ClosedPosition {
   marketId: string;
   question: string;
   status: "resolved" | "cancelled";
+  /** The result, for a resolved market. */
+  outcome: "YES" | "NO" | null;
   /** Coins bet. */
   spent: Coins;
   /** Coins back: sales, payouts and refunds. */
@@ -67,6 +69,7 @@ export async function getPortfolio(db: Db, memberId: string, now: Date = new Dat
         marketId: ledger.marketId,
         question: markets.question,
         status: markets.status,
+        outcome: markets.outcome,
         spent: sql<string>`coalesce(-sum(${ledger.amount}) filter (where ${ledger.reason} = 'bet'), 0)`,
         received: sql<string>`coalesce(sum(${ledger.amount}) filter (where ${ledger.reason} <> 'bet'), 0)`,
         endedAt: sql<string>`max(${ledger.createdAt})`,
@@ -124,6 +127,7 @@ export async function getPortfolio(db: Db, memberId: string, now: Date = new Dat
       marketId: r.marketId!,
       question: r.question,
       status: r.status as ClosedPosition["status"],
+      outcome: r.outcome,
       spent,
       received,
       net: received - spent,

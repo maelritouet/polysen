@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { rankableMarkets, realisedGains, standings, type Fill, type Settlement, type Standing } from "@/core/leaderboard";
 import { D } from "@/core/money";
 import type { Db } from "@/db/client";
@@ -25,32 +25,27 @@ export async function loadFills(db: Db, memberId?: string): Promise<Fill[]> {
 }
 
 /**
- * Settled markets: when they settled (their first settlement ledger row) and
- * what each player got back in payouts and refunds. Seed returns and creator
- * bonuses are not trading, so they never count.
+ * Settled markets: when they settled, and what each player got back in
+ * payouts and refunds. Seed returns and creator bonuses are not trading.
  */
 export async function loadSettlements(db: Db): Promise<Settlement[]> {
-  const rows = await db
-    .select({
-      marketId: ledger.marketId,
-      memberId: ledger.memberId,
-      reason: ledger.reason,
-      amount: ledger.amount,
-      at: ledger.createdAt,
-    })
-    .from(ledger)
-    .innerJoin(markets, eq(markets.id, ledger.marketId))
-    .where(
-      and(inArray(markets.status, ["resolved", "cancelled"]), inArray(ledger.reason, ["payout", "refund", "seed_return"])),
-    )
-    .orderBy(asc(ledger.id));
-  const byMarket = new Map<string, Settlement & { paid: Map<string, bigint> }>();
+  const [settled, rows] = await Promise.all([
+    db
+      .select({ id: markets.id, at: markets.settledAt })
+      .from(markets)
+      .where(and(inArray(markets.status, ["resolved", "cancelled"]), isNotNull(markets.settledAt))),
+    db
+      .select({ marketId: ledger.marketId, memberId: ledger.memberId, amount: ledger.amount })
+      .from(ledger)
+      .innerJoin(markets, eq(markets.id, ledger.marketId))
+      .where(and(inArray(markets.status, ["resolved", "cancelled"]), inArray(ledger.reason, ["payout", "refund"]))),
+  ]);
+  const byMarket = new Map<string, Settlement & { paid: Map<string, bigint> }>(
+    settled.map((m) => [m.id, { marketId: m.id, at: m.at!, paid: new Map<string, bigint>() }]),
+  );
   for (const r of rows) {
-    const s = byMarket.get(r.marketId!) ?? { marketId: r.marketId!, at: r.at, paid: new Map<string, bigint>() };
-    if (r.at < s.at) s.at = r.at;
-    // The seed return only dates the settlement (every settled market has one); it is not a trade.
-    if (r.reason !== "seed_return") s.paid.set(r.memberId, (s.paid.get(r.memberId) ?? 0n) + r.amount);
-    byMarket.set(s.marketId, s);
+    const s = byMarket.get(r.marketId!);
+    if (s) s.paid.set(r.memberId, (s.paid.get(r.memberId) ?? 0n) + r.amount);
   }
   return [...byMarket.values()];
 }

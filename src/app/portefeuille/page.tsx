@@ -100,7 +100,7 @@ async function PortefeuillePageContent() {
                         {c.question}
                       </Link>
                       <span className="block text-xs text-dim">
-                        {c.status === "cancelled" ? "Annulé, mises rendues" : "Résolu"} · misé {formatCoinsFr(c.spent)} · récupéré{" "}
+                        {c.status === "cancelled" ? "Annulé, mises rendues" : `Résolu : ${c.outcome === "NO" ? "non" : "oui"}`} · misé {formatCoinsFr(c.spent)} · récupéré{" "}
                         {formatCoinsFr(c.received)}
                       </span>
                     </span>

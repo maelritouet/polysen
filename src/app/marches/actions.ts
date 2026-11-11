@@ -9,6 +9,7 @@ import { parisLocalToDate } from "@/lib/paris-time";
 import { addComment, deleteMyComment } from "@/server/comments";
 import { isUserError } from "@/server/errors";
 import { createMarket, getVisibleMarket, removeMyMarket, respondToTag } from "@/server/markets";
+import { disputeResolution, proposeResolution } from "@/server/resolution";
 import { requireMember } from "@/server/session";
 import { buy, heldShares, quoteBuyFor, quoteSellFor, sell, sharesForPercent } from "@/server/trading";
 
@@ -158,6 +159,31 @@ export async function deleteCommentAction(commentId: string): Promise<FormState>
   let marketId: string;
   try {
     marketId = await deleteMyComment(db, me.id, BigInt(commentId));
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function proposeResolutionAction(marketId: string, outcome: string, proof: string): Promise<FormState> {
+  const me = await requireMember();
+  if (outcome !== "YES" && outcome !== "NO" && outcome !== "CANCEL") return { error: "Choisis un résultat." };
+  try {
+    await proposeResolution(db, me.id, { marketId, outcome, proof });
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function disputeResolutionAction(resolutionId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(resolutionId)) return { error: "Résultat introuvable." };
+  let marketId: string;
+  try {
+    marketId = await disputeResolution(db, me.id, BigInt(resolutionId), reason);
   } catch (err) {
     return userErrorOr(err);
   }

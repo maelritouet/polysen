@@ -66,3 +66,18 @@ describe("the friends feed", () => {
     expect(await getFeed(t.db, lea, 3)).toHaveLength(3);
   });
 });
+
+describe("resolved markets in the feed", () => {
+  it("shows a payout as an event dated when it settled", async () => {
+    const { proposeResolution, runTick, DISPUTE_WINDOW_MS } = await import("./resolution");
+    const lea = await member();
+    const sam = await member();
+    const m = await market(lea, "Le run aura-t-il lieu ?");
+    await insertTestBuy(t.db, m.id, sam, "YES", 500n, { withLedger: true });
+    await t.db.update(markets).set({ createdAt: new Date(Date.now() - 3 * HOUR), closeAt: new Date(Date.now() - HOUR) }).where(eq(markets.id, m.id));
+    await proposeResolution(t.db, lea, { marketId: m.id, outcome: "YES", proof: "Photo du départ" });
+    await runTick(t.db, new Date(Date.now() + DISPUTE_WINDOW_MS + 1000));
+    const feed = mine(await getFeed(t.db, sam), [m.id]);
+    expect(feed[0]).toMatchObject({ kind: "resolved", outcome: "YES", memberId: lea });
+  });
+});
