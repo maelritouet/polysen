@@ -10,7 +10,7 @@ export function DropButton({ claimed }: { claimed: boolean }) {
   const done = claimed || Boolean(state?.ok);
   return (
     <form action={action} className="flex flex-col gap-2">
-      <Button type="submit" disabled={pending || done}>
+      <Button type="submit" variant="outline" disabled={pending || done} className="h-11 rounded-xl border-yes/40 text-yes">
         {done ? "Récompense du jour récupérée" : "Récupérer ma récompense du jour"}
       </Button>
       <FormMessage error={state?.error} ok={state?.ok} />

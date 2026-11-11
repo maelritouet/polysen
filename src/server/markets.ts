@@ -204,6 +204,8 @@ export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
 }
 
 export interface MarketSummary {
+  /** When this was read (for "Ferme dans 3 h"). */
+  asOf: Date;
   id: string;
   creatorId: string;
   question: string;
@@ -240,8 +242,11 @@ const summaryColumns = {
   createdAt: markets.createdAt,
 };
 
-function toSummary({ poolYes, poolNo, ...r }: { poolYes: string; poolNo: string } & Omit<MarketSummary, "percent">): MarketSummary {
-  return { ...r, percent: displayPercent({ yes: D(poolYes), no: D(poolNo) }) };
+function toSummary(
+  { poolYes, poolNo, ...r }: { poolYes: string; poolNo: string } & Omit<MarketSummary, "percent" | "asOf">,
+  asOf: Date,
+): MarketSummary {
+  return { ...r, asOf, percent: displayPercent({ yes: D(poolYes), no: D(poolNo) }) };
 }
 
 /** Open (and, for those involved, pending) markets this member can see, closing soonest first. */
@@ -251,7 +256,8 @@ export async function listVisibleMarkets(db: Db, viewerId: string): Promise<Mark
     .from(markets)
     .where(and(inArray(markets.status, ["open", "pending_approval"]), visibleTo(viewerId)))
     .orderBy(asc(markets.closeAt));
-  return rows.map(toSummary);
+  const now = new Date();
+  return rows.map((r) => toSummary(r, now));
 }
 
 /** One market, or null if it doesn't exist or this member can't see it. */
@@ -260,7 +266,7 @@ export async function getVisibleMarket(db: Db, viewerId: string, marketId: strin
     .select(summaryColumns)
     .from(markets)
     .where(and(eq(markets.id, marketId), visibleTo(viewerId)));
-  return row ? toSummary(row) : null;
+  return row ? toSummary(row, new Date()) : null;
 }
 
 /** The close-date bounds for the creation form: earliest allowed, and a default one day out. */
@@ -296,5 +302,5 @@ export async function getMarketDetails(
     .select({ yes: positions.yes, no: positions.no, invested: positions.invested })
     .from(positions)
     .where(and(eq(positions.marketId, marketId), eq(positions.memberId, viewerId)));
-  return { ...summary, bettingClosed: summary.closeAt <= now, creator, tags, mine: p ? { yes: p.yes, no: p.no, invested: BigInt(p.invested) } : null };
+  return { ...summary, bettingClosed: summary.closeAt <= now, asOf: now, creator, tags, mine: p ? { yes: p.yes, no: p.no, invested: BigInt(p.invested) } : null };
 }

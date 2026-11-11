@@ -1,14 +1,14 @@
 import { Suspense } from "react";
-import { PageSkeleton } from "@/components/page-skeleton";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppHeader } from "@/components/app-header";
+import { Sparkline } from "@/components/market/sparkline";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { db } from "@/db";
-import { formatCoinsFr } from "@/lib/format";
+import { closesIn } from "@/lib/format-time";
+import { getPriceHistories } from "@/server/history";
+import { listVisibleMarkets } from "@/server/markets";
 import { requireMember } from "@/server/session";
 import { getBalance, hasClaimedToday } from "@/server/wallet";
-import { listVisibleMarkets } from "@/server/markets";
-import { formatParis } from "@/lib/paris-time";
-import { buttonVariants } from "@/components/ui/button";
 import { signOut } from "./connexion/actions";
 import { DropButton } from "./drop-button";
 
@@ -19,53 +19,58 @@ async function HomePageContent() {
     hasClaimedToday(db, me.id),
     listVisibleMarkets(db, me.id),
   ]);
+  const histories = await getPriceHistories(db, markets.map((m) => m.id));
+  const now = markets[0]?.asOf.getTime() ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Salut {me.firstName} 👋</h1>
-        <form action={signOut}>
-          <button type="submit" className="text-sm text-muted-foreground underline underline-offset-4">
-            Déconnexion
-          </button>
-        </form>
-      </header>
-      <Card>
-        <CardHeader>
-          <CardDescription>Ton solde</CardDescription>
-          <CardTitle className="text-4xl tabular-nums">{formatCoinsFr(balance)}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <DropButton claimed={claimed} />
-          <Link href="/portefeuille" className="text-sm underline underline-offset-4">
-            Historique et lien d&apos;invitation
-          </Link>
-        </CardContent>
-      </Card>
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Marchés</h2>
-          <Link href="/marches/nouveau" className={buttonVariants({ size: "sm" })}>
-            Créer un marché
+      <AppHeader balance={balance} />
+
+      {!claimed && <DropButton claimed={claimed} />}
+
+      <section>
+        <h1 className="text-2xl font-bold">Marchés ouverts</h1>
+        {markets.length === 0 ? (
+          <p className="mt-2 text-dim">Aucun marché pour l&apos;instant. Pose la première question au groupe.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-line">
+            {markets.map((m) => (
+              <li key={m.id}>
+                <Link
+                  href={`/marches/${m.id}`}
+                  className="-mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-panel focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="leading-snug font-semibold">{m.question}</p>
+                    <p className="mt-1 text-sm text-dim">
+                      {m.status === "pending_approval" ? "En attente d'accord" : closesIn(m.closeAt, now)}
+                    </p>
+                  </div>
+                  <Sparkline points={histories.get(m.id) ?? []} now={now} />
+                  <p className="w-14 shrink-0 text-right text-xl font-extrabold text-yes tabular-nums">{m.percent} %</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <form action={signOut} className="mt-4">
+        <button type="submit" className="text-sm text-dim underline underline-offset-4">
+          Se déconnecter
+        </button>
+      </form>
+
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-night/95 backdrop-blur">
+        <div className="mx-auto max-w-xl px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Link
+            href="/marches/nouveau"
+            className="flex h-13 items-center justify-center rounded-xl bg-ink text-base font-extrabold text-night focus-visible:ring-2 focus-visible:ring-yes focus-visible:outline-none"
+          >
+            Poser une question au groupe
           </Link>
         </div>
-        {markets.length === 0 && <p className="text-sm text-muted-foreground">Aucun marché ouvert. Lance le premier !</p>}
-        {markets.map((m) => (
-          <Link key={m.id} href={`/marches/${m.id}`}>
-            <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader>
-                <CardDescription>
-                  {m.status === "pending_approval" ? "En attente d'accord · " : ""}Ferme {formatParis(m.closeAt)}
-                </CardDescription>
-                <CardTitle className="flex items-start justify-between gap-3 text-base leading-snug">
-                  <span>{m.question}</span>
-                  <span className="shrink-0 tabular-nums">{m.percent} %</span>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          </Link>
-        ))}
-      </section>
+      </div>
     </div>
   );
 }

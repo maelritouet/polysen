@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { removeMarketAction, respondToTagAction } from "../actions";
 
 /** For a member named in the market: approve or refuse it, or remove it later. */
@@ -14,15 +13,13 @@ export function TagControls({ marketId, canRespond }: { marketId: string; canRes
     start(async () => setError((await fn())?.error));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>
+    <section className="rounded-xl border border-line p-4">
+      <p className="text-sm text-dim">
           {canRespond
             ? "Tu es nommé·e dans ce marché. Personne d'autre ne le voit tant que tu n'as pas accepté."
             : "Tu es nommé·e dans ce marché. Tu peux le retirer à tout moment : tout le monde est remboursé."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex gap-2">
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {canRespond ? (
           <>
             <Button disabled={pending} onClick={() => run(() => respondToTagAction(marketId, true))}>
@@ -44,7 +41,7 @@ export function TagControls({ marketId, canRespond }: { marketId: string; canRes
           </Button>
         )}
         <FormMessage error={error} />
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

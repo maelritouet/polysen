@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Side } from "@/core/amm";
 import { db } from "@/db";
-import { formatCoinsFr } from "@/lib/format";
+import { formatCoinsFr, formatSharesFr } from "@/lib/format";
 import { parisLocalToDate } from "@/lib/paris-time";
 import { isUserError } from "@/server/errors";
 import { createMarket, getVisibleMarket, removeMyMarket, respondToTag } from "@/server/markets";
@@ -77,7 +77,7 @@ export async function removeMarketAction(marketId: string): Promise<FormState> {
   redirect("/");
 }
 
-export type BuyQuote = { shares: string; percentAfter: number; payoutAtLeast: string } | { error: string };
+export type BuyQuote = { shares: string; percentAfter: number; payoutAtLeast: string; gainAtLeast: string } | { error: string };
 export type SellQuote = { proceeds: string; percentAfter: number } | { error: string };
 export type TradeOutcome = { ok: string } | { error: string };
 
@@ -92,7 +92,12 @@ export async function quoteBuyAction(marketId: string, side: Side, coinsText: st
   if (coins === null) return { error: "Mise en pièces entières." };
   try {
     const q = await quoteBuyFor(db, marketId, asSide(side), coins);
-    return { shares: q.shares.toFixed(2), percentAfter: q.percentAfter, payoutAtLeast: formatCoinsFr(q.payoutAtLeast) };
+    return {
+      shares: formatSharesFr(q.shares),
+      percentAfter: q.percentAfter,
+      payoutAtLeast: formatCoinsFr(q.payoutAtLeast),
+      gainAtLeast: formatCoinsFr(q.payoutAtLeast - coins, { sign: true }),
+    };
   } catch (err) {
     return userErrorOr(err);
   }
@@ -117,7 +122,7 @@ export async function buyAction(marketId: string, side: Side, coinsText: string,
   try {
     const r = await buy(db, me.id, { marketId, side: asSide(side), coins, requestId });
     revalidatePath(`/marches/${marketId}`);
-    return { ok: `Pari placé : ${r.shares.toFixed(2)} parts ${side === "YES" ? "OUI" : "NON"}. Le marché est à ${r.percentAfter} %.` };
+    return { ok: `Pari placé : ${formatSharesFr(r.shares)} parts ${side === "YES" ? "oui" : "non"}. Le marché est à ${r.percentAfter} %.` };
   } catch (err) {
     return userErrorOr(err);
   }
