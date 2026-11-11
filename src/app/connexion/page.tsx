@@ -9,7 +9,7 @@ import { AuthForms } from "./auth-forms";
 /** The static frame renders instantly; the part that reads the URL and cookies streams in. */
 export default function ConnexionPage({ searchParams }: PageProps<"/connexion">) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-6 pt-8">
       <h1 className="text-3xl font-bold tracking-tight">Poly&apos;sen</h1>
       <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-muted" />}>
         <SignIn searchParams={searchParams} />

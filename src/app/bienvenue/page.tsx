@@ -16,7 +16,7 @@ async function BienvenuePageContent() {
   const code = (await cookies()).get(INVITE_COOKIE)?.value ?? "";
 
   return (
-    <Card>
+    <Card className="mx-auto mt-8 w-full max-w-md">
       <CardHeader>
         <CardTitle>Bienvenue !</CardTitle>
         <CardDescription>

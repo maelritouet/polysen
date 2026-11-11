@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
+import { BetPanel } from "@/components/market/bet-panel";
 import { BetSheet } from "@/components/market/bet-sheet";
 import { PriceChart } from "@/components/market/price-chart";
 import { SellButton } from "@/components/market/sell-button";
@@ -56,90 +57,96 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
           ? "Marché annulé : tout le monde a été remboursé."
           : "Marché résolu.";
 
+  const trade = {
+    marketId: m.id,
+    percent: m.percent,
+    balanceWhole: Number(balance / 100n),
+    holds: { YES: held.YES.gt(0), NO: held.NO.gt(0) },
+    tradable,
+    closedReason,
+  };
+
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <AppHeader balance={balance} />
-        <p className="flex flex-wrap gap-x-3 text-sm text-dim">
-          <span>Lancé par @{m.creator.nickname}</span>
-          <span title={formatParis(m.closeAt)}>{m.status === "open" ? closesIn(m.closeAt, now) : closedReason}</span>
-        </p>
-        <h1 className="mt-2 text-2xl leading-tight font-bold text-balance">{m.question}</h1>
+    <div>
+      <AppHeader balance={balance} />
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex min-w-0 flex-col gap-8">
+          <div>
+            <p className="flex flex-wrap gap-x-3 text-sm text-dim">
+              <span>Lancé par @{m.creator.nickname}</span>
+              <span title={formatParis(m.closeAt)}>{m.status === "open" ? closesIn(m.closeAt, now) : closedReason}</span>
+            </p>
+            <h1 className="mt-2 text-2xl leading-tight font-bold text-balance lg:text-3xl">{m.question}</h1>
+          </div>
+
+          <PriceChart points={history} now={now} end={now} />
+
+          {myTag && (m.status === "open" || m.status === "pending_approval") && (
+            <TagControls marketId={m.id} canRespond={m.status === "pending_approval" && myTag.status === "pending"} />
+          )}
+
+          {sides.length > 0 && (
+            <section className="rounded-xl border border-line p-4">
+              <h2 className="font-bold">Ta position</h2>
+              <ul className="mt-3 space-y-3">
+                {sides.map((s) => (
+                  <li key={s} className="flex items-center justify-between gap-4">
+                    <div className="text-sm">
+                      <p>
+                        <span className={`font-bold ${s === "YES" ? "text-yes" : "text-no"}`}>{LABEL[s]}</span>{" "}
+                        <span className="tabular-nums">{formatSharesFr(held[s])} parts</span>
+                      </p>
+                      <p className="text-dim">
+                        Si c&apos;est {LABEL[s].toLowerCase()} : au moins {formatCoinsFr(decimalToCoinsDown(held[s]))}. Revente
+                        maintenant : {sellValue.get(s)}.
+                      </p>
+                    </div>
+                    {tradable && <SellButton side={s} />}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section>
+            <h2 className="font-bold">Comment on saura</h2>
+            <p className="mt-1 text-dim">{m.criteria}</p>
+            <p className="mt-3 text-sm text-dim">Fermeture des paris le {formatParis(m.closeAt)}.</p>
+            {m.tags.length > 0 && (
+              <p className="mt-1 text-sm text-dim">
+                Personnes nommées :{" "}
+                {m.tags
+                  .map((t) => `@${t.nickname}${t.status === "pending" ? " (en attente)" : t.status === "refused" ? " (a refusé)" : ""}`)
+                  .join(", ")}
+              </p>
+            )}
+          </section>
+
+          <section>
+            <h2 className="font-bold">Activité</h2>
+            {activity.length === 0 ? (
+              <p className="mt-1 text-dim">Personne n&apos;a encore parié. Lance-toi.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-line">
+                {activity.map((a) => (
+                  <li key={a.id} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">
+                    <span>
+                      <span className="font-semibold">@{a.nickname}</span>{" "}
+                      {a.kind === "buy" ? "a parié" : "a revendu"}{" "}
+                      <span className="tabular-nums">{formatCoinsFr(a.coins)}</span>{" "}
+                      {a.kind === "buy" ? "sur" : "de"}{" "}
+                      <span className={`font-semibold ${a.side === "YES" ? "text-yes" : "text-no"}`}>{LABEL[a.side].toLowerCase()}</span>
+                    </span>
+                    <span className="shrink-0 text-dim">{ago(a.at, now)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+        <BetPanel {...trade} />
       </div>
-
-      <PriceChart points={history} now={now} end={now} />
-
-      {myTag && (m.status === "open" || m.status === "pending_approval") && (
-        <TagControls marketId={m.id} canRespond={m.status === "pending_approval" && myTag.status === "pending"} />
-      )}
-
-      {sides.length > 0 && (
-        <section className="rounded-xl border border-line p-4">
-          <h2 className="font-bold">Ta position</h2>
-          <ul className="mt-3 space-y-3">
-            {sides.map((s) => (
-              <li key={s} className="flex items-center justify-between gap-4">
-                <div className="text-sm">
-                  <p>
-                    <span className={`font-bold ${s === "YES" ? "text-yes" : "text-no"}`}>{LABEL[s]}</span>{" "}
-                    <span className="tabular-nums">{formatSharesFr(held[s])} parts</span>
-                  </p>
-                  <p className="text-dim">
-                    Si c&apos;est {LABEL[s].toLowerCase()} : au moins {formatCoinsFr(decimalToCoinsDown(held[s]))}. Revente
-                    maintenant : {sellValue.get(s)}.
-                  </p>
-                </div>
-                {tradable && <SellButton side={s} />}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <h2 className="font-bold">Comment on saura</h2>
-        <p className="mt-1 text-dim">{m.criteria}</p>
-        <p className="mt-3 text-sm text-dim">Fermeture des paris le {formatParis(m.closeAt)}.</p>
-        {m.tags.length > 0 && (
-          <p className="mt-1 text-sm text-dim">
-            Personnes nommées :{" "}
-            {m.tags
-              .map((t) => `@${t.nickname}${t.status === "pending" ? " (en attente)" : t.status === "refused" ? " (a refusé)" : ""}`)
-              .join(", ")}
-          </p>
-        )}
-      </section>
-
-      <section>
-        <h2 className="font-bold">Activité</h2>
-        {activity.length === 0 ? (
-          <p className="mt-1 text-dim">Personne n&apos;a encore parié. Lance-toi.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-line">
-            {activity.map((a) => (
-              <li key={a.id} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">
-                <span>
-                  <span className="font-semibold">@{a.nickname}</span>{" "}
-                  {a.kind === "buy" ? "a parié" : "a revendu"}{" "}
-                  <span className="tabular-nums">{formatCoinsFr(a.coins)}</span>{" "}
-                  {a.kind === "buy" ? "sur" : "de"}{" "}
-                  <span className={`font-semibold ${a.side === "YES" ? "text-yes" : "text-no"}`}>{LABEL[a.side].toLowerCase()}</span>
-                </span>
-                <span className="shrink-0 text-dim">{ago(a.at, now)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <BetSheet
-        marketId={m.id}
-        percent={m.percent}
-        balanceWhole={Number(balance / 100n)}
-        holds={{ YES: held.YES.gt(0), NO: held.NO.gt(0) }}
-        tradable={tradable}
-        closedReason={closedReason}
-      />
+      <BetSheet {...trade} />
     </div>
   );
 }

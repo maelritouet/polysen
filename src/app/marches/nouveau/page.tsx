@@ -17,15 +17,17 @@ async function NewMarketContent() {
   return (
     <div>
       <AppHeader balance={balance} />
-      <h1 className="text-2xl font-bold">Poser une question</h1>
-      <p className="mt-1 text-dim">Une question à laquelle on répond par oui ou non. Lancer le marché coûte 100 pièces.</p>
-      <div className="mt-6">
-        <CreateMarketForm
-          members={members}
-          rules={CONTENT_RULES}
-          defaultClose={toParisLocal(close.suggested)}
-          minClose={toParisLocal(close.min)}
-        />
+      <div className="mx-auto max-w-xl">
+        <h1 className="text-2xl font-bold">Poser une question</h1>
+        <p className="mt-1 text-dim">Une question à laquelle on répond par oui ou non. Lancer le marché coûte 100 pièces.</p>
+        <div className="mt-6">
+          <CreateMarketForm
+            members={members}
+            rules={CONTENT_RULES}
+            defaultClose={toParisLocal(close.suggested)}
+            minClose={toParisLocal(close.min)}
+          />
+        </div>
       </div>
     </div>
   );

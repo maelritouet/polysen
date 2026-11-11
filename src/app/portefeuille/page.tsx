@@ -1,15 +1,16 @@
 import { Suspense } from "react";
-import { PageSkeleton } from "@/components/page-skeleton";
 import { headers } from "next/headers";
 import Link from "next/link";
+import { AppHeader } from "@/components/app-header";
+import { MobileTabBar } from "@/components/nav-links";
+import { PageSkeleton } from "@/components/page-skeleton";
 import type { LedgerReason } from "@/core/ledger";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
 import { formatCoinsFr } from "@/lib/format";
 import { requireMember } from "@/server/session";
 import { getBalance, getHistory } from "@/server/wallet";
 import { rotateInviteAction } from "../actions";
+import { signOut } from "../connexion/actions";
 import { CopyLink } from "./copy-link";
 
 const REASON_LABELS: Record<LedgerReason, string> = {
@@ -34,55 +35,59 @@ async function PortefeuillePageContent() {
   const inviteUrl = `${origin}/invitation/${me.inviteCode}`;
 
   return (
-    <div className="flex flex-col gap-6">
-      <Link href="/" className="text-sm text-muted-foreground underline underline-offset-4">
-        ← Accueil
-      </Link>
-      <Card>
-        <CardHeader>
-          <CardDescription>Ton solde</CardDescription>
-          <CardTitle className="text-4xl tabular-nums">{formatCoinsFr(balance)}</CardTitle>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Ton lien d&apos;invitation</CardTitle>
-          <CardDescription>
-            Toute personne qui s&apos;inscrit avec ce lien rejoint le jeu, et on saura que c&apos;est toi qui l&apos;as
-            invitée.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <CopyLink url={inviteUrl} />
-          <form action={rotateInviteAction}>
-            <Button type="submit" variant="ghost" className="w-full">
-              Lien diffusé trop largement ? En générer un nouveau
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Historique</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="flex flex-col divide-y">
+    <div>
+      <AppHeader balance={balance} />
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0">
+          <p className="text-sm text-dim">Ton solde</p>
+          <p className="mt-1 text-5xl font-extrabold tabular-nums">
+            {formatCoinsFr(balance)} <span className="text-lg font-normal text-dim">pièces</span>
+          </p>
+          <h2 className="mt-10 text-lg font-bold">Historique</h2>
+          <ul className="mt-2 divide-y divide-line">
             {history.map((row) => (
-              <li key={row.id.toString()} className="flex items-center justify-between py-2 text-sm">
+              <li key={row.id.toString()} className="flex items-center justify-between gap-4 py-3 text-sm">
                 <span>
-                  {REASON_LABELS[row.reason]}
-                  <span className="block text-xs text-muted-foreground">{DATE.format(row.createdAt)}</span>
+                  {row.marketId ? (
+                    <Link href={`/marches/${row.marketId}`} className="underline-offset-4 hover:underline">
+                      {REASON_LABELS[row.reason]}
+                    </Link>
+                  ) : (
+                    REASON_LABELS[row.reason]
+                  )}
+                  <span className="block text-xs text-dim">{DATE.format(row.createdAt)}</span>
                 </span>
-                <span className={`tabular-nums ${row.amount < 0n ? "text-destructive" : ""}`}>
+                <span className={`font-semibold tabular-nums ${row.amount < 0n ? "text-no" : "text-yes"}`}>
                   {formatCoinsFr(row.amount, { sign: true })}
                 </span>
               </li>
             ))}
           </ul>
-        </CardContent>
-      </Card>
+        </section>
+
+        <aside className="flex flex-col gap-6">
+          <div className="rounded-xl border border-line p-4">
+            <h2 className="font-bold">Ton lien d&apos;invitation</h2>
+            <p className="mt-1 text-sm text-dim">
+              Toute personne qui s&apos;inscrit avec ce lien rejoint le jeu, et on saura que c&apos;est toi qui l&apos;as invitée.
+            </p>
+            <div className="mt-4">
+              <CopyLink url={inviteUrl} />
+            </div>
+            <form action={rotateInviteAction} className="mt-2">
+              <button type="submit" className="text-sm text-dim underline underline-offset-4">
+                Lien diffusé trop largement ? En générer un nouveau
+              </button>
+            </form>
+          </div>
+          <form action={signOut}>
+            <button type="submit" className="text-sm text-dim underline underline-offset-4">
+              Se déconnecter
+            </button>
+          </form>
+        </aside>
+      </div>
+      <MobileTabBar />
     </div>
   );
 }
