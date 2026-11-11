@@ -222,7 +222,7 @@ export interface MarketSummary {
  * else only once every tag is approved. A refused or removed market stays
  * hidden from everyone else for good.
  */
-function visibleTo(viewerId: string) {
+export function visibleTo(viewerId: string) {
   return or(
     eq(markets.creatorId, viewerId),
     sql`exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.memberId} = ${viewerId})`,

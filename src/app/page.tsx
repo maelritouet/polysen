@@ -1,12 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
+import { FeedList } from "@/components/feed-list";
 import { MobileTabBar } from "@/components/nav-links";
 import { formatCoinsFr } from "@/lib/format";
 import { ClosingCard, MarketCard } from "@/components/market/market-card";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { db } from "@/db";
 import { closingSoon, parseSort, sortMarkets, SORTS, type SortKey } from "@/lib/market-sort";
+import { getFeed } from "@/server/feed";
 import { getMarketStats, getPriceHistories } from "@/server/history";
 import { listVisibleMarkets } from "@/server/markets";
 import { requireMember } from "@/server/session";
@@ -16,14 +18,15 @@ import { DropButton } from "./drop-button";
 async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   const sort: SortKey = parseSort((await searchParams).tri);
   const me = await requireMember();
-  const [balance, claimed, markets] = await Promise.all([
+  const [balance, claimed, markets, feed] = await Promise.all([
     getBalance(db, me.id),
     hasClaimedToday(db, me.id),
     listVisibleMarkets(db, me.id),
+    getFeed(db, me.id, 15),
   ]);
   const ids = markets.map((m) => m.id);
   const [histories, stats] = await Promise.all([getPriceHistories(db, ids), getMarketStats(db, ids)]);
-  const now = markets[0]?.asOf.getTime() ?? 0;
+  const now = markets[0]?.asOf.getTime() ?? feed[0]?.at.getTime() ?? 0;
   const enriched = markets.map((m) => ({ ...m, ...stats.get(m.id)! }));
   const soon = closingSoon(enriched, now);
   const sorted = sortMarkets(enriched, sort);
@@ -75,6 +78,13 @@ async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">[
               </ul>
             )}
           </section>
+
+          <section className="lg:hidden">
+            <h2 className="text-lg font-bold">Fil des potes</h2>
+            <div className="mt-2">
+              <FeedList events={feed} now={now} meId={me.id} />
+            </div>
+          </section>
         </div>
 
         <aside className="flex flex-col gap-4 lg:order-none order-first">
@@ -91,6 +101,12 @@ async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">[
               </div>
             )}
           </div>
+          <section className="hidden lg:block">
+            <h2 className="text-lg font-bold">Fil des potes</h2>
+            <div className="mt-2">
+              <FeedList events={feed} now={now} meId={me.id} />
+            </div>
+          </section>
         </aside>
       </div>
       <MobileTabBar />
