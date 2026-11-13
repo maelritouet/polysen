@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
+import { googleSignInEnabled } from "@/lib/env";
 import { INVITE_COOKIE } from "@/lib/invite-cookie";
 import { inviterForCode } from "@/server/members";
 import { AuthForms } from "./auth-forms";
@@ -23,6 +24,12 @@ async function SignIn({ searchParams }: { searchParams: PageProps<"/connexion">[
   const next = typeof params.suivant === "string" ? params.suivant : "/";
   const suspended = params.suspendu === "1";
   const deleted = params.supprime === "1";
+  const failed =
+    params.erreur === "lien"
+      ? "Ce lien de connexion a expiré ou a déjà servi. Connecte-toi, ou recommence."
+      : params.erreur === "google"
+        ? "La connexion avec Google n'a pas marché. Réessaie."
+        : null;
   const code = (await cookies()).get(INVITE_COOKIE)?.value;
   const inviter = code ? await inviterForCode(db, code) : null;
 
@@ -34,6 +41,7 @@ async function SignIn({ searchParams }: { searchParams: PageProps<"/connexion">[
         </p>
       )}
       {suspended && <p className="text-sm text-destructive">Ton compte est suspendu. Parle à un admin.</p>}
+      {failed && <p className="text-sm text-destructive">{failed}</p>}
       {deleted && <p className="rounded-lg bg-muted p-3 text-sm">Ton compte a été supprimé. Merci d&apos;avoir joué !</p>}
       <Card>
         <CardHeader>
@@ -41,7 +49,7 @@ async function SignIn({ searchParams }: { searchParams: PageProps<"/connexion">[
           <CardDescription>Pas d&apos;argent réel : on joue avec des pièces pour de faux.</CardDescription>
         </CardHeader>
         <CardContent>
-          <AuthForms next={next} startWithSignUp={Boolean(inviter)} />
+          <AuthForms next={next} startWithSignUp={Boolean(inviter)} google={googleSignInEnabled()} />
         </CardContent>
       </Card>
     </>
