@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { comments, markets, marketTags, profiles } from "@/db/schema";
+import { avatars, comments, markets, marketTags, profiles } from "@/db/schema";
 import { UserError } from "./errors";
 import { cancelMarket } from "./markets";
 import { generateInviteCode } from "./members";
@@ -19,7 +19,7 @@ export function anonymousNickname(): string {
  * Deletes a member's account (PRD "Personal data", decision 016), all or nothing:
  * - markets that name them and are still running are cancelled and refunded,
  *   as if they had pressed « Retirer » (their consent ends with the account);
- * - their comments are deleted;
+ * - their comments and their photo are deleted;
  * - their first name, nickname and invite code are replaced, and they can no
  *   longer sign in (e-mail, password and Google link scrubbed from Supabase Auth);
  * - their bets, sales and payouts stay in the ledger, so every total still adds up.
@@ -69,6 +69,8 @@ export async function deleteAccount(db: Db, memberId: string, now: Date = new Da
       .update(comments)
       .set({ deletedAt: now })
       .where(and(eq(comments.memberId, memberId), isNull(comments.deletedAt)));
+
+    await tx.delete(avatars).where(eq(avatars.memberId, memberId));
 
     await tx
       .update(profiles)

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  customType,
   bigint,
   bigserial,
   boolean,
@@ -343,3 +344,21 @@ export const positions = pgView("positions", {
       sum(case when kind = 'buy' then coins else -coins end)::bigint as invested
     from trades group by market_id, member_id`,
   );
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * Profile photos (decision 018): one small WebP per member, re-encoded by the
+ * server (which also strips the phone's location data). Served by /photo/<id>.
+ */
+export const avatars = pgTable(
+  "avatars",
+  {
+    memberId: uuid("member_id")
+      .primaryKey()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    image: bytea("image").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [check("avatars_image_size", sql`octet_length(image) <= 200000`)],
+).enableRLS();

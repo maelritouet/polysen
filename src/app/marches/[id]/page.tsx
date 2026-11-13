@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
+import { Avatar } from "@/components/avatar";
 import { BetPanel } from "@/components/market/bet-panel";
 import { BetSheet } from "@/components/market/bet-sheet";
 import { PriceChart } from "@/components/market/price-chart";
@@ -90,7 +91,10 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
         <div className="flex min-w-0 flex-col gap-8">
           <div>
             <div className="flex flex-wrap items-center gap-x-3 text-sm text-dim">
-              <span>Lancé par @{m.creator.nickname}</span>
+              <span className="flex items-center gap-1.5">
+                <Avatar memberId={m.creator.id} size={20} />
+                Lancé par @{m.creator.nickname}
+              </span>
               <span title={formatParis(m.closeAt)}>{m.status === "open" ? closesIn(m.closeAt, now) : closedReason}</span>
               {!m.hiddenAt && (m.status === "open" || m.status === "resolved") && (
                 <span className="ml-auto">
@@ -225,6 +229,7 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
                 {thread.map((c) => (
                   <li key={c.id.toString()} className="py-3 text-sm">
                     <p className="flex flex-wrap items-center gap-x-2">
+                      <Avatar memberId={c.memberId} size={22} />
                       <span className="font-semibold">@{c.nickname}</span>
                       {c.holding && <SideChip side={c.holding} />}
                       <span className="text-xs text-dim">{ago(c.createdAt, now)}</span>
@@ -253,12 +258,15 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
               <ul className="mt-2 divide-y divide-line">
                 {activity.map((a) => (
                   <li key={a.id} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">
-                    <span>
+                    <span className="flex items-center gap-2">
+                      <Avatar memberId={a.memberId} size={22} />
+                      <span>
                       <span className="font-semibold">@{a.nickname}</span>{" "}
                       {a.kind === "buy" ? "a parié" : "a revendu"}{" "}
                       <span className="tabular-nums">{formatCoinsFr(a.coins)}</span>{" "}
                       {a.kind === "buy" ? "sur" : "de"}{" "}
                       <span className={`font-semibold ${a.side === "YES" ? "text-yes" : "text-no"}`}>{LABEL[a.side].toLowerCase()}</span>
+                      </span>
                     </span>
                     <span className="shrink-0 text-dim">{ago(a.at, now)}</span>
                   </li>

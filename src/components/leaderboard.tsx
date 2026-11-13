@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Row } from "@/server/leaderboard";
+import { Avatar } from "./avatar";
 import { Gain } from "./portfolio";
 
 const MEDAL = ["text-gold", "text-[#c9d3df]", "text-[#d99a6c]"];
@@ -15,6 +16,7 @@ function Line({ row, me }: { row: Row; me: boolean }) {
       className={`flex items-center gap-3 rounded-lg px-2 py-2 text-sm ${me ? "bg-panel ring-1 ring-line" : ""}`}
     >
       <RankCell rank={row.rank} />
+      <Avatar memberId={row.memberId} size={24} />
       <span className="min-w-0 flex-1 truncate font-semibold">
         @{row.nickname}
         {me && <span className="ml-1.5 font-normal text-dim">(toi)</span>}

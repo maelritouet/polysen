@@ -5,7 +5,7 @@ import { newPool, quoteBuy, type Side } from "@/core/amm";
 import { MARKET_SEED } from "@/core/ledger";
 import { D } from "@/core/money";
 import { createDb, type Db } from "@/db/client";
-import { adminActions, comments, dailyClaims, disputes, reports, resolutions, ledger, markets, marketTags, profiles, trades } from "@/db/schema";
+import { adminActions, avatars, comments, dailyClaims, disputes, reports, resolutions, ledger, markets, marketTags, profiles, trades } from "@/db/schema";
 
 /**
  * Helpers for tests that run against the local Supabase database
@@ -116,6 +116,7 @@ export async function cleanup(db: Db, users: Set<string>): Promise<void> {
   await db.delete(marketTags).where(or(inArray(marketTags.memberId, ids), inArray(marketTags.marketId, theirMarkets)));
   await db.delete(markets).where(inArray(markets.creatorId, ids));
   await db.update(profiles).set({ invitedBy: null }).where(inArray(profiles.invitedBy, ids));
+  await db.delete(avatars).where(inArray(avatars.memberId, ids));
   await db.delete(profiles).where(inArray(profiles.id, ids));
   await db.execute(sql`delete from auth.users where id in ${ids}`);
   users.clear();
