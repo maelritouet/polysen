@@ -14,6 +14,7 @@ import { getBalance, getHistory } from "@/server/wallet";
 import { rotateInviteAction } from "../actions";
 import { signOut } from "../connexion/actions";
 import { CopyLink } from "./copy-link";
+import { DeleteAccount } from "./delete-account";
 
 const REASON_LABELS: Record<LedgerReason, string> = {
   grant: "Bienvenue",
@@ -163,6 +164,10 @@ async function PortefeuillePageContent() {
               Se déconnecter
             </button>
           </form>
+          <Link href="/confidentialite" className="text-sm text-dim underline underline-offset-4">
+            Tes données et la confidentialité
+          </Link>
+          <DeleteAccount />
         </aside>
       </div>
       <MobileTabBar />

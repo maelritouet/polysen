@@ -22,6 +22,7 @@ import { quoteSellFor } from "@/server/trading";
 import { getBalance } from "@/server/wallet";
 import { CommentForm, DeleteComment } from "./comments";
 import { ReportButton } from "./report-button";
+import { ShareButton } from "./share-button";
 import { DisputeForm, ProposeForm } from "./resolution-forms";
 import { TagControls } from "./tag-controls";
 
@@ -91,8 +92,13 @@ async function MarketContent({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex flex-wrap items-center gap-x-3 text-sm text-dim">
               <span>Lancé par @{m.creator.nickname}</span>
               <span title={formatParis(m.closeAt)}>{m.status === "open" ? closesIn(m.closeAt, now) : closedReason}</span>
-              {m.creator.id !== me.id && !m.hiddenAt && (
+              {!m.hiddenAt && (m.status === "open" || m.status === "resolved") && (
                 <span className="ml-auto">
+                  <ShareButton marketId={m.id} inviteCode={me.inviteCode} question={m.question} />
+                </span>
+              )}
+              {m.creator.id !== me.id && !m.hiddenAt && (
+                <span className={m.status === "open" || m.status === "resolved" ? "" : "ml-auto"}>
                   <ReportButton target="market" id={m.id} />
                 </span>
               )}

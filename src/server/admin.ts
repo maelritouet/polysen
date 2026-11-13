@@ -157,6 +157,10 @@ export async function adminSetSuspended(db: Db, adminId: string, memberId: strin
   await assertAdmin(db, adminId);
   if (memberId === adminId) throw new UserError("Tu ne peux pas te suspendre toi-même.");
   await db.transaction(async (tx) => {
+    const [target] = await tx.select({ deletedAt: profiles.deletedAt }).from(profiles).where(eq(profiles.id, memberId)).for("update");
+    if (!target) throw new UserError("Membre introuvable.");
+    // A deleted account has no name and no sign-in left: there is nothing to bring back (decision 016).
+    if (target.deletedAt) throw new UserError("Ce compte a été supprimé par son propriétaire.");
     await tx.update(profiles).set({ suspendedAt: suspended ? now : null }).where(eq(profiles.id, memberId));
     await log(tx, adminId, suspended ? "suspend" : "unsuspend", { memberId }, now);
   });

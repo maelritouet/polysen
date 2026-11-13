@@ -43,6 +43,13 @@
       "when": 1794439166516,
       "tag": "20261111231926_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794574433769,
+      "tag": "20261113125353_account_deletion",
+      "breakpoints": true
     }
   ]
 }

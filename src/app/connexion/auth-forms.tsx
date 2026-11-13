@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { FormMessage } from "@/components/form-message";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,14 @@ export function AuthForms({ next, startWithSignUp }: { next: string; startWithSi
           required
         />
       </div>
+      {signingUp && (
+        <p className="text-xs text-muted-foreground">
+          On garde ton e-mail, ton prénom, ton pseudo et ce que tu fais dans le jeu, rien d&apos;autre.{" "}
+          <Link href="/confidentialite" className="underline underline-offset-4">
+            Détails
+          </Link>
+        </p>
+      )}
       <FormMessage error={state?.error} ok={state?.ok} />
       <Button type="submit" disabled={pending}>
         {signingUp ? "Créer mon compte" : "Se connecter"}

@@ -22,6 +22,7 @@ async function SignIn({ searchParams }: { searchParams: PageProps<"/connexion">[
   const params = await searchParams;
   const next = typeof params.suivant === "string" ? params.suivant : "/";
   const suspended = params.suspendu === "1";
+  const deleted = params.supprime === "1";
   const code = (await cookies()).get(INVITE_COOKIE)?.value;
   const inviter = code ? await inviterForCode(db, code) : null;
 
@@ -33,6 +34,7 @@ async function SignIn({ searchParams }: { searchParams: PageProps<"/connexion">[
         </p>
       )}
       {suspended && <p className="text-sm text-destructive">Ton compte est suspendu. Parle à un admin.</p>}
+      {deleted && <p className="rounded-lg bg-muted p-3 text-sm">Ton compte a été supprimé. Merci d&apos;avoir joué !</p>}
       <Card>
         <CardHeader>
           <CardTitle>{inviter ? "Crée ton compte" : "Connexion"}</CardTitle>

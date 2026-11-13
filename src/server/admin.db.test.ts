@@ -15,6 +15,7 @@ import {
   reportComment,
   reportMarket,
 } from "./admin";
+import { deleteAccount } from "./account";
 import { addComment, listComments } from "./comments";
 import { createMarket, getVisibleMarket } from "./markets";
 import { disputeResolution, getResolution, NO_RESULT_DEADLINE_MS, proposeResolution } from "./resolution";
@@ -177,5 +178,12 @@ describe("members", () => {
     await expect(adminSetSuspended(t.db, boss, boss, true)).rejects.toThrow(/toi-même/);
     const kinds = (await getAdminLog(t.db)).filter((l) => l.memberId === lea).map((l) => l.kind);
     expect(kinds).toEqual(["revoke_create", "unsuspend", "suspend"]);
+  });
+
+  it("cannot bring back an account its owner deleted", async () => {
+    const lea = await member();
+    const boss = await admin();
+    await deleteAccount(t.db, lea);
+    await expect(adminSetSuspended(t.db, boss, lea, false)).rejects.toThrow(/supprimé/);
   });
 });

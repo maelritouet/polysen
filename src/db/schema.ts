@@ -60,6 +60,8 @@ export const profiles = pgTable(
     invitedBy: uuid("invited_by").references((): AnyPgColumn => profiles.id, { onDelete: "restrict" }),
     canCreate: boolean("can_create").notNull().default(true),
     suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    /** Set when the member deleted their account: names scrubbed, sign-in gone, bets kept (decision 016). */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
