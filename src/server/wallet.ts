@@ -2,12 +2,12 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { dailyDropAmount, type LedgerReason } from "@/core/ledger";
 import type { Coins } from "@/core/money";
 import { parisDate, previousDay } from "@/core/time";
-import type { Db } from "@/db/client";
+import type { Db, Tx } from "@/db/client";
 import { dailyClaims, ledger, profiles } from "@/db/schema";
 import { UserError } from "./errors";
 
 /** A member's balance: the sum of their ledger rows, in hundredths. */
-export async function getBalance(db: Db, memberId: string): Promise<Coins> {
+export async function getBalance(db: Db | Tx, memberId: string): Promise<Coins> {
   const [row] = await db
     .select({ total: sql<string>`coalesce(sum(${ledger.amount}), 0)` })
     .from(ledger)
