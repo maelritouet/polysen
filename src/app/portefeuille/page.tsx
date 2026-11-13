@@ -8,12 +8,15 @@ import { PageSkeleton } from "@/components/page-skeleton";
 import type { LedgerReason } from "@/core/ledger";
 import { db } from "@/db";
 import { formatCoinsFr } from "@/lib/format";
+import { photoVersion } from "@/server/photos";
 import { getPortfolio } from "@/server/portfolio";
 import { requireMember } from "@/server/session";
 import { getBalance, getHistory } from "@/server/wallet";
 import { rotateInviteAction } from "../actions";
 import { signOut } from "../connexion/actions";
 import { CopyLink } from "./copy-link";
+import { DeleteAccount } from "./delete-account";
+import { PhotoForm } from "./photo-form";
 
 const REASON_LABELS: Record<LedgerReason, string> = {
   grant: "Bienvenue",
@@ -31,7 +34,12 @@ const DATE = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", dateSt
 
 async function PortefeuillePageContent() {
   const me = await requireMember();
-  const [balance, history, portfolio] = await Promise.all([getBalance(db, me.id), getHistory(db, me.id), getPortfolio(db, me.id)]);
+  const [balance, history, portfolio, photo] = await Promise.all([
+    getBalance(db, me.id),
+    getHistory(db, me.id),
+    getPortfolio(db, me.id),
+    photoVersion(db, me.id),
+  ]);
   const now = portfolio.asOf.getTime();
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
@@ -135,6 +143,15 @@ async function PortefeuillePageContent() {
 
         <aside className="flex flex-col gap-6">
           <div className="rounded-xl border border-line p-4">
+            <h2 className="font-bold">
+              {me.firstName} <span className="font-normal text-dim">@{me.nickname}</span>
+            </h2>
+            <p className="mt-1 text-sm text-dim">Ta photo apparaît à côté de tes paris et de tes messages.</p>
+            <div className="mt-3">
+              <PhotoForm memberId={me.id} version={photo} />
+            </div>
+          </div>
+          <div className="rounded-xl border border-line p-4">
             <h2 className="font-bold">Ton lien d&apos;invitation</h2>
             <p className="mt-1 text-sm text-dim">
               Toute personne qui s&apos;inscrit avec ce lien rejoint le jeu, et on saura que c&apos;est toi qui l&apos;as invitée.
@@ -163,6 +180,10 @@ async function PortefeuillePageContent() {
               Se déconnecter
             </button>
           </form>
+          <Link href="/confidentialite" className="text-sm text-dim underline underline-offset-4">
+            Tes données et la confidentialité
+          </Link>
+          <DeleteAccount />
         </aside>
       </div>
       <MobileTabBar />

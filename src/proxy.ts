@@ -10,7 +10,9 @@ import { supabaseEnv } from "@/lib/env";
 
 // The manifest is fetched without cookies, so it must not redirect to sign-in.
 // The payout job has no session: its route checks its own secret.
-const PUBLIC_PATHS = ["/connexion", "/invitation/", "/manifest.webmanifest", "/api/tick"];
+// /m/<id> is a shared market's public preview (and its OG image); /confidentialite is the privacy note.
+// /auth/callback is where Google sign-in and the e-mail confirmation link come back to.
+const PUBLIC_PATHS = ["/connexion", "/invitation/", "/manifest.webmanifest", "/api/tick", "/m/", "/confidentialite", "/auth/callback"];
 
 export async function proxy(request: NextRequest) {
   const { url, key } = supabaseEnv();

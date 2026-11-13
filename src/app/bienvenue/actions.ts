@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { INVITE_COOKIE } from "@/lib/invite-cookie";
+import { INVITE_COOKIE, LANDING_COOKIE, landingPath } from "@/lib/invite-cookie";
 import { isUserError } from "@/server/errors";
 import { createProfile } from "@/server/members";
 import { currentUserId } from "@/server/session";
@@ -24,6 +24,9 @@ export async function createProfileAction(_prev: ProfileState, form: FormData): 
     if (isUserError(err)) return { error: err.message };
     throw err;
   }
-  (await cookies()).delete(INVITE_COOKIE);
-  redirect("/");
+  const jar = await cookies();
+  const landing = landingPath(jar.get(LANDING_COOKIE)?.value);
+  jar.delete(INVITE_COOKIE);
+  jar.delete(LANDING_COOKIE);
+  redirect(landing);
 }

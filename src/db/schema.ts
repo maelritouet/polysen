@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  customType,
   bigint,
   bigserial,
   boolean,
@@ -60,6 +61,8 @@ export const profiles = pgTable(
     invitedBy: uuid("invited_by").references((): AnyPgColumn => profiles.id, { onDelete: "restrict" }),
     canCreate: boolean("can_create").notNull().default(true),
     suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+    /** Set when the member deleted their account: names scrubbed, sign-in gone, bets kept (decision 016). */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -341,3 +344,21 @@ export const positions = pgView("positions", {
       sum(case when kind = 'buy' then coins else -coins end)::bigint as invested
     from trades group by market_id, member_id`,
   );
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * Profile photos (decision 018): one small WebP per member, re-encoded by the
+ * server (which also strips the phone's location data). Served by /photo/<id>.
+ */
+export const avatars = pgTable(
+  "avatars",
+  {
+    memberId: uuid("member_id")
+      .primaryKey()
+      .references(() => profiles.id, { onDelete: "restrict" }),
+    image: bytea("image").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [check("avatars_image_size", sql`octet_length(image) <= 200000`)],
+).enableRLS();

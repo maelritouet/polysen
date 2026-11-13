@@ -46,6 +46,7 @@ export function probabilityAt(points: PricePoint[], t: number): number | null {
 
 export interface ActivityRow {
   id: string;
+  memberId: string;
   nickname: string;
   side: "YES" | "NO";
   kind: "buy" | "sell";
@@ -58,6 +59,7 @@ export async function getActivity(db: Db, marketId: string, limit = 30): Promise
   const rows = await db
     .select({
       id: trades.id,
+      memberId: trades.memberId,
       nickname: profiles.nickname,
       side: trades.side,
       kind: trades.kind,

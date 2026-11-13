@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatWholeCoinsFr } from "@/lib/format";
+import { Avatar } from "./avatar";
 import { ago } from "@/lib/format-time";
 import type { FeedEvent } from "@/server/feed";
 
@@ -12,8 +13,10 @@ export function FeedList({ events, now, meId }: { events: FeedEvent[]; now: numb
         <li key={`${e.kind}-${e.marketId}-${e.at.getTime()}-${i}`}>
           <Link
             href={`/marches/${e.marketId}`}
-            className="-mx-2 block rounded-lg px-2 py-3 transition-colors hover:bg-panel focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="-mx-2 flex gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-panel focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
+            <Avatar memberId={e.memberId} size={28} className="mt-0.5" />
+            <div className="min-w-0">
             {e.kind === "resolved" ? (
               <p className="text-sm">
                 {e.memberId === meId ? "Ton marché" : <>Le marché de <span className="font-semibold">@{e.nickname}</span></>} est résolu :{" "}
@@ -35,6 +38,7 @@ export function FeedList({ events, now, meId }: { events: FeedEvent[]; now: numb
             )}
             <p className="mt-0.5 line-clamp-1 text-sm text-dim">{e.question}</p>
             <p className="mt-0.5 text-xs text-dim">{ago(e.at, now)}</p>
+            </div>
           </Link>
         </li>
       ))}
