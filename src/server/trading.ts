@@ -54,6 +54,7 @@ async function lockForTrade(tx: Tx, marketId: string, memberId: string) {
 
 function checkOpen(m: typeof markets.$inferSelect, now: Date) {
   if (m.status !== "open") throw new UserError("Ce marché n'est pas ouvert aux paris.");
+  if (m.hiddenAt) throw new UserError("Ce marché a été signalé : paris suspendus en attendant l'admin.");
   if (m.closeAt <= now) throw new UserError("Ce marché est fermé : plus de paris possibles.");
 }
 

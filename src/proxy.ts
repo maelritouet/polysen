@@ -8,7 +8,9 @@ import { supabaseEnv } from "@/lib/env";
  * security boundary: every server action checks the session itself.
  */
 
-const PUBLIC_PATHS = ["/connexion", "/invitation/"];
+// The manifest is fetched without cookies, so it must not redirect to sign-in.
+// The payout job has no session: its route checks its own secret.
+const PUBLIC_PATHS = ["/connexion", "/invitation/", "/manifest.webmanifest", "/api/tick"];
 
 export async function proxy(request: NextRequest) {
   const { url, key } = supabaseEnv();

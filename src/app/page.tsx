@@ -1,85 +1,155 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
-import { Sparkline } from "@/components/market/sparkline";
+import { FeedList } from "@/components/feed-list";
+import { LeaderboardPreview } from "@/components/leaderboard";
+import { MobileTabBar } from "@/components/nav-links";
+import { Gain, PortfolioSummary } from "@/components/portfolio";
+import { formatCoinsFr } from "@/lib/format";
+import { ClosingCard, MarketCard } from "@/components/market/market-card";
 import { PageSkeleton } from "@/components/page-skeleton";
 import { db } from "@/db";
-import { closesIn } from "@/lib/format-time";
-import { getPriceHistories } from "@/server/history";
+import { closingSoon, parseSort, sortMarkets, SORTS, type SortKey } from "@/lib/market-sort";
+import { getFeed } from "@/server/feed";
+import { getLeaderboard } from "@/server/leaderboard";
+import { getMarketStats, getPriceHistories } from "@/server/history";
 import { listVisibleMarkets } from "@/server/markets";
+import { getPortfolio } from "@/server/portfolio";
 import { requireMember } from "@/server/session";
 import { getBalance, hasClaimedToday } from "@/server/wallet";
-import { signOut } from "./connexion/actions";
 import { DropButton } from "./drop-button";
 
-async function HomePageContent() {
+async function HomePageContent({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
+  const sort: SortKey = parseSort((await searchParams).tri);
   const me = await requireMember();
-  const [balance, claimed, markets] = await Promise.all([
+  const [balance, claimed, markets, feed, portfolio, board] = await Promise.all([
     getBalance(db, me.id),
     hasClaimedToday(db, me.id),
     listVisibleMarkets(db, me.id),
+    getFeed(db, me.id, 15),
+    getPortfolio(db, me.id),
+    getLeaderboard(db),
   ]);
-  const histories = await getPriceHistories(db, markets.map((m) => m.id));
-  const now = markets[0]?.asOf.getTime() ?? 0;
+  const ids = markets.map((m) => m.id);
+  const [histories, stats] = await Promise.all([getPriceHistories(db, ids), getMarketStats(db, ids)]);
+  const now = portfolio.asOf.getTime();
+  const enriched = markets.map((m) => ({ ...m, ...stats.get(m.id)! }));
+  const soon = closingSoon(enriched, now);
+  const sorted = sortMarkets(enriched, sort);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div>
       <AppHeader balance={balance} />
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-10">
+          {soon.length > 0 && (
+            <section className="min-w-0">
+              <h2 className="text-lg font-bold">Ferment bientôt</h2>
+              <ul className="-mx-4 mt-3 scrollbar-thin flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:scroll-px-0 lg:px-0">
+                {soon.map((m) => (
+                  <li key={m.id} className="flex">
+                    <ClosingCard market={m} now={now} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-      {!claimed && <DropButton claimed={claimed} />}
+          <section>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h1 className="text-2xl font-bold lg:text-3xl">Marchés</h1>
+              <nav aria-label="Trier les marchés" className="flex gap-1">
+                {SORTS.map((s) => (
+                  <Link
+                    key={s.key}
+                    href={s.key === "tendance" ? "/" : `/?tri=${s.key}`}
+                    scroll={false}
+                    aria-current={sort === s.key ? "page" : undefined}
+                    className="rounded-md px-3 py-1.5 text-sm font-semibold text-dim transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-secondary aria-[current=page]:text-ink"
+                  >
+                    {s.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+            {sorted.length === 0 ? (
+              <p className="mt-3 text-dim">Aucun marché pour l&apos;instant. Pose la première question au groupe.</p>
+            ) : (
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                {sorted.map((m) => (
+                  <li key={m.id}>
+                    <MarketCard market={m} stats={stats.get(m.id)!} points={histories.get(m.id) ?? []} now={now} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-      <section>
-        <h1 className="text-2xl font-bold">Marchés ouverts</h1>
-        {markets.length === 0 ? (
-          <p className="mt-2 text-dim">Aucun marché pour l&apos;instant. Pose la première question au groupe.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-line">
-            {markets.map((m) => (
-              <li key={m.id}>
-                <Link
-                  href={`/marches/${m.id}`}
-                  className="-mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-panel focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="leading-snug font-semibold">{m.question}</p>
-                    <p className="mt-1 text-sm text-dim">
-                      {m.status === "pending_approval" ? "En attente d'accord" : closesIn(m.closeAt, now)}
-                    </p>
-                  </div>
-                  <Sparkline points={histories.get(m.id) ?? []} now={now} />
-                  <p className="w-14 shrink-0 text-right text-xl font-extrabold text-yes tabular-nums">{m.percent} %</p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <section className="lg:hidden">
+            <h2 className="text-lg font-bold">Classement de la semaine</h2>
+            <div className="mt-2">
+              <LeaderboardPreview rows={board.week} meId={me.id} />
+            </div>
+          </section>
 
-      <form action={signOut} className="mt-4">
-        <button type="submit" className="text-sm text-dim underline underline-offset-4">
-          Se déconnecter
-        </button>
-      </form>
-
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-night/95 backdrop-blur">
-        <div className="mx-auto max-w-xl px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <Link
-            href="/marches/nouveau"
-            className="flex h-13 items-center justify-center rounded-xl bg-ink text-base font-extrabold text-night focus-visible:ring-2 focus-visible:ring-yes focus-visible:outline-none"
-          >
-            Poser une question au groupe
-          </Link>
+          <section className="lg:hidden">
+            <h2 className="text-lg font-bold">Fil des potes</h2>
+            <div className="mt-2">
+              <FeedList events={feed} now={now} meId={me.id} />
+            </div>
+          </section>
         </div>
+
+        <aside className="flex flex-col gap-4 lg:order-none order-first">
+          {!claimed && (
+            <div className="lg:hidden">
+              <DropButton claimed={claimed} />
+            </div>
+          )}
+          <div className="hidden rounded-xl border border-line p-4 lg:block">
+            <PortfolioSummary balance={balance} portfolio={portfolio} now={now} />
+            {!claimed && (
+              <div className="mt-4">
+                <DropButton claimed={claimed} />
+              </div>
+            )}
+          </div>
+          {portfolio.open.length > 0 && (
+            <Link
+              href="/portefeuille"
+              className="flex items-center justify-between rounded-xl border border-line px-4 py-3 text-sm lg:hidden"
+            >
+              <span className="text-dim">
+                {portfolio.open.length} position{portfolio.open.length > 1 ? "s" : ""} · en jeu{" "}
+                <span className="font-semibold text-ink tabular-nums">{formatCoinsFr(portfolio.value)}</span>
+              </span>
+              <Gain amount={portfolio.value - portfolio.cost} className="font-semibold" />
+            </Link>
+          )}
+          <section className="hidden lg:block">
+            <h2 className="text-lg font-bold">Classement de la semaine</h2>
+            <div className="mt-2">
+              <LeaderboardPreview rows={board.week} meId={me.id} />
+            </div>
+          </section>
+          <section className="hidden lg:block">
+            <h2 className="text-lg font-bold">Fil des potes</h2>
+            <div className="mt-2">
+              <FeedList events={feed} now={now} meId={me.id} />
+            </div>
+          </section>
+        </aside>
       </div>
+      <MobileTabBar />
     </div>
   );
 }
 
 /** Instant shell; the per-member content streams in (Cache Components). */
-export default function HomePage() {
+export default function HomePage({ searchParams }: PageProps<"/">) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <HomePageContent />
+      <HomePageContent searchParams={searchParams} />
     </Suspense>
   );
 }

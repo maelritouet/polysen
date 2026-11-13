@@ -1,5 +1,5 @@
 import "server-only";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { getProfile, type Profile } from "./members";
@@ -19,4 +19,11 @@ export async function requireMember(): Promise<Profile> {
   if (!profile) redirect("/bienvenue");
   if (profile.suspendedAt) redirect("/connexion?suspendu=1");
   return profile;
+}
+
+/** For the admin page: anyone else gets a 404, as if it didn't exist. Server functions check the role again. */
+export async function requireAdmin(): Promise<Profile> {
+  const me = await requireMember();
+  if (me.role !== "admin") notFound();
+  return me;
 }

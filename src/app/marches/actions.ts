@@ -6,8 +6,11 @@ import type { Side } from "@/core/amm";
 import { db } from "@/db";
 import { formatCoinsFr, formatSharesFr } from "@/lib/format";
 import { parisLocalToDate } from "@/lib/paris-time";
+import { reportComment, reportMarket } from "@/server/admin";
+import { addComment, deleteMyComment } from "@/server/comments";
 import { isUserError } from "@/server/errors";
 import { createMarket, getVisibleMarket, removeMyMarket, respondToTag } from "@/server/markets";
+import { disputeResolution, proposeResolution } from "@/server/resolution";
 import { requireMember } from "@/server/session";
 import { buy, heldShares, quoteBuyFor, quoteSellFor, sell, sharesForPercent } from "@/server/trading";
 
@@ -138,4 +141,77 @@ export async function sellAction(marketId: string, side: Side, percent: number, 
   } catch (err) {
     return userErrorOr(err);
   }
+}
+
+export async function addCommentAction(marketId: string, text: string): Promise<FormState> {
+  const me = await requireMember();
+  try {
+    await addComment(db, me.id, marketId, text);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function deleteCommentAction(commentId: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(commentId)) return { error: "Message introuvable." };
+  let marketId: string;
+  try {
+    marketId = await deleteMyComment(db, me.id, BigInt(commentId));
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function proposeResolutionAction(marketId: string, outcome: string, proof: string): Promise<FormState> {
+  const me = await requireMember();
+  if (outcome !== "YES" && outcome !== "NO" && outcome !== "CANCEL") return { error: "Choisis un résultat." };
+  try {
+    await proposeResolution(db, me.id, { marketId, outcome, proof });
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function disputeResolutionAction(resolutionId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(resolutionId)) return { error: "Résultat introuvable." };
+  let marketId: string;
+  try {
+    marketId = await disputeResolution(db, me.id, BigInt(resolutionId), reason);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath(`/marches/${marketId}`);
+  return null;
+}
+
+export async function reportMarketAction(marketId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  try {
+    await reportMarket(db, me.id, marketId, reason);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath("/");
+  revalidatePath("/admin");
+  return null;
+}
+
+export async function reportCommentAction(commentId: string, reason: string): Promise<FormState> {
+  const me = await requireMember();
+  if (!/^\d{1,19}$/.test(commentId)) return { error: "Message introuvable." };
+  try {
+    await reportComment(db, me.id, BigInt(commentId), reason);
+  } catch (err) {
+    return userErrorOr(err);
+  }
+  revalidatePath("/admin");
+  return null;
 }

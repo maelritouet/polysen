@@ -35,6 +35,13 @@ Each sequence mixes random buys, sales, resolutions (YES / NO) and cancellations
 
 14. **The creator bonus is 1% of every bet minus every sale on the market**, everyone's bets included (the creator's too), with no cap. It is paid once, when the market resolves: never on a cancel, and never on a result that gets overturned. Buying and selling straight back earns the creator nothing. It never counts as trading profit. (Decided 2026-11-11, decision 007.)
 
+## The leaderboard
+
+15. **Only realised profit counts.** Selling shares realises what you got minus what those shares cost you at your average price. When a market ends, what you're paid or refunded minus the cost of the shares you still hold is realised. An open bet counts for nothing until then. (Decision 011.)
+16. **Over a market that has ended, your realised gains add up exactly to your coins out minus your coins in**, to the hundredth. Buying and selling straight back realises 0. A cancelled market realises 0 overall for every player, except a profit that could not be taken back (rule 9).
+17. **Drops, the starting grant, creator bonuses and the creator's seed never count.** Neither do markets where fewer than 3 different people have traded.
+18. **The week starts Monday 00:00 Paris time; the season is a semester** (1 September → 1 February → 1 September). Everyone is listed, equal profits share a rank.
+
 ## Decided on 2026-11-10
 
 - Seed: the creator pays 100 coins to open the pool, and gets back at most 100 + 1% of what the crowd lost at resolution (rule 13, changed 2026-11-11), or 100 on cancel (rule 9).
@@ -50,5 +57,7 @@ Each sequence mixes random buys, sales, resolutions (YES / NO) and cancellations
 | 8, 9, 13, 14 | `src/core/settlement.test.ts`, plus rules 8, 13 and 14 inside the random games |
 | 10 | `src/core/amm.test.ts` (pool side) and `src/core/invariants.test.ts` (tiny trades) |
 | 13 (leaderboard) | `src/core/ledger.test.ts` |
+| 15, 16, 17 | `src/core/leaderboard.test.ts` (16 on 2,000 random games), plus `src/server/leaderboard.db.test.ts` against the database |
+| 18 | `src/lib/periods.test.ts` and `src/core/leaderboard.test.ts` |
 
 The random games are checked to really exercise every action (thousands of buys, sells, creations, resolutions and cancels), and each test was proven able to fail by planting a bug and watching it go red.

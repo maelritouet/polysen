@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { displayPercent, newPool } from "@/core/amm";
 import { canSpend, MARKET_SEED } from "@/core/ledger";
 import { cancelRefunds } from "@/core/settlement";
@@ -144,7 +144,7 @@ export async function respondToTag(db: Db, memberId: string, marketId: string, a
       .where(and(eq(marketTags.marketId, marketId), eq(marketTags.memberId, memberId)));
 
     if (!approve) {
-      await cancelMarket(tx, marketId);
+      await cancelMarket(tx, marketId, now);
       return;
     }
     const [waiting] = await tx
@@ -176,7 +176,7 @@ export async function removeMyMarket(db: Db, memberId: string, marketId: string,
       .update(marketTags)
       .set({ status: "refused", respondedAt: now })
       .where(and(eq(marketTags.marketId, marketId), eq(marketTags.memberId, memberId)));
-    await cancelMarket(tx, marketId);
+    await cancelMarket(tx, marketId, now);
   });
 }
 
@@ -187,7 +187,7 @@ export async function removeMyMarket(db: Db, memberId: string, marketId: string,
  * Players are locked in id order, the same order trading uses after the
  * market lock, so two cancels or a cancel and a bet can't deadlock.
  */
-export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
+export async function cancelMarket(tx: Tx, marketId: string, now: Date = new Date()): Promise<void> {
   const book = await loadBook(tx, marketId);
   if (!book) throw new Error(`Unknown market ${marketId}`);
   const players = [...book.positions.keys()].sort();
@@ -198,9 +198,9 @@ export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
   }
   const rows = cancelRefunds(book, balances)
     .filter((t) => t.amount !== 0n)
-    .map((t) => ({ memberId: t.memberId, amount: t.amount, reason: t.reason, marketId }));
+    .map((t) => ({ memberId: t.memberId, amount: t.amount, reason: t.reason, marketId, createdAt: now }));
   if (rows.length) await tx.insert(ledger).values(rows);
-  await tx.update(markets).set({ status: "cancelled" }).where(eq(markets.id, marketId));
+  await tx.update(markets).set({ status: "cancelled", settledAt: now }).where(eq(markets.id, marketId));
 }
 
 export interface MarketSummary {
@@ -215,6 +215,8 @@ export interface MarketSummary {
   /** YES probability shown on screen, 1 to 99. */
   percent: number;
   createdAt: Date;
+  /** Set while a report hides it (only its creator still sees it). */
+  hiddenAt: Date | null;
 }
 
 /**
@@ -222,11 +224,17 @@ export interface MarketSummary {
  * else only once every tag is approved. A refused or removed market stays
  * hidden from everyone else for good.
  */
-function visibleTo(viewerId: string) {
+export function visibleTo(viewerId: string) {
   return or(
     eq(markets.creatorId, viewerId),
-    sql`exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.memberId} = ${viewerId})`,
-    sql`not exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.status} <> 'approved')`,
+    and(
+      // A reported market is hidden from everyone but its creator until the admin looks.
+      isNull(markets.hiddenAt),
+      or(
+        sql`exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.memberId} = ${viewerId})`,
+        sql`not exists (select 1 from ${marketTags} where ${marketTags.marketId} = ${markets.id} and ${marketTags.status} <> 'approved')`,
+      ),
+    ),
   );
 }
 
@@ -240,6 +248,7 @@ const summaryColumns = {
   poolYes: markets.poolYes,
   poolNo: markets.poolNo,
   createdAt: markets.createdAt,
+  hiddenAt: markets.hiddenAt,
 };
 
 function toSummary(

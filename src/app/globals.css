@@ -7,6 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-yes: var(--yes);
+  --color-gold: var(--gold);
   --color-no: var(--no);
   --color-panel: var(--panel);
   --color-line: var(--line);
@@ -63,6 +64,7 @@
   --ink: #e8eef6;
   --dim: #8da0b8;
   --yes: #3be0a0;
+  --gold: #f5c451;
   --no: #ff6b6b;
 
   --background: var(--night);
@@ -151,4 +153,9 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+/* Horizontal strips (e.g. "Ferment bientôt"): a thin scrollbar in the theme's line colour. */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
