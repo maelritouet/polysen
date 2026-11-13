@@ -199,3 +199,21 @@ describe("listing markets", () => {
     expect(ids).toEqual([sooner.id, later.id]);
   });
 });
+
+describe("price history", () => {
+  it("starts at 50% when the market opened and follows every trade", async () => {
+    const { getPriceHistory, probabilityAt } = await import("./history");
+    const lea = await member();
+    const tom = await member(50000n);
+    const m = await createMarket(t.db, lea, input({ closeAt: new Date(Date.now() + 48 * HOUR) }));
+    await insertTestBuy(t.db, m.id, tom, "YES", 10000n);
+    await insertTestBuy(t.db, m.id, tom, "NO", 2000n);
+    const points = await getPriceHistory(t.db, m.id);
+    expect(points).toHaveLength(3);
+    expect(points[0].p).toBe(0.5);
+    expect(points[1].p).toBeCloseTo(0.8, 12);
+    expect(points[2].p).toBeLessThan(0.8);
+    expect(probabilityAt(points, points[0].t - 1)).toBeNull();
+    expect(probabilityAt(points, Date.now() + 1000)).toBe(points[2].p);
+  });
+});

@@ -4,7 +4,7 @@ import { canSpend, MARKET_SEED } from "@/core/ledger";
 import { cancelRefunds } from "@/core/settlement";
 import { parisDate } from "@/core/time";
 import type { Db, Tx } from "@/db/client";
-import { ledger, markets, marketTags, profiles } from "@/db/schema";
+import { ledger, markets, marketTags, positions, profiles } from "@/db/schema";
 import { D } from "@/core/money";
 import { loadBook } from "./book";
 import { UserError } from "./errors";
@@ -204,6 +204,8 @@ export async function cancelMarket(tx: Tx, marketId: string): Promise<void> {
 }
 
 export interface MarketSummary {
+  /** When this was read (for "Ferme dans 3 h"). */
+  asOf: Date;
   id: string;
   creatorId: string;
   question: string;
@@ -240,8 +242,11 @@ const summaryColumns = {
   createdAt: markets.createdAt,
 };
 
-function toSummary({ poolYes, poolNo, ...r }: { poolYes: string; poolNo: string } & Omit<MarketSummary, "percent">): MarketSummary {
-  return { ...r, percent: displayPercent({ yes: D(poolYes), no: D(poolNo) }) };
+function toSummary(
+  { poolYes, poolNo, ...r }: { poolYes: string; poolNo: string } & Omit<MarketSummary, "percent" | "asOf">,
+  asOf: Date,
+): MarketSummary {
+  return { ...r, asOf, percent: displayPercent({ yes: D(poolYes), no: D(poolNo) }) };
 }
 
 /** Open (and, for those involved, pending) markets this member can see, closing soonest first. */
@@ -251,7 +256,8 @@ export async function listVisibleMarkets(db: Db, viewerId: string): Promise<Mark
     .from(markets)
     .where(and(inArray(markets.status, ["open", "pending_approval"]), visibleTo(viewerId)))
     .orderBy(asc(markets.closeAt));
-  return rows.map(toSummary);
+  const now = new Date();
+  return rows.map((r) => toSummary(r, now));
 }
 
 /** One market, or null if it doesn't exist or this member can't see it. */
@@ -260,5 +266,41 @@ export async function getVisibleMarket(db: Db, viewerId: string, marketId: strin
     .select(summaryColumns)
     .from(markets)
     .where(and(eq(markets.id, marketId), visibleTo(viewerId)));
-  return row ? toSummary(row) : null;
+  return row ? toSummary(row, new Date()) : null;
+}
+
+/** The close-date bounds for the creation form: earliest allowed, and a default one day out. */
+export function closeDateDefaults(now: Date = new Date()): { min: Date; suggested: Date } {
+  return { min: new Date(now.getTime() + MIN_CLOSE_DELAY_MS + 60_000), suggested: new Date(now.getTime() + 24 * HOUR) };
+}
+
+export interface MarketDetails extends MarketSummary {
+  /** True once close_at has passed: no more trades. */
+  bettingClosed: boolean;
+  creator: { id: string; nickname: string };
+  tags: Array<{ memberId: string; nickname: string; status: "pending" | "approved" | "refused" }>;
+  /** This viewer's shares and coins in (bets − sales). */
+  mine: { yes: string; no: string; invested: bigint } | null;
+}
+
+/** Everything the market page shows, or null if this member can't see it. */
+export async function getMarketDetails(
+  db: Db,
+  viewerId: string,
+  marketId: string,
+  now: Date = new Date(),
+): Promise<MarketDetails | null> {
+  const summary = await getVisibleMarket(db, viewerId, marketId);
+  if (!summary) return null;
+  const [creator] = await db.select({ id: profiles.id, nickname: profiles.nickname }).from(profiles).where(eq(profiles.id, summary.creatorId));
+  const tags = await db
+    .select({ memberId: marketTags.memberId, nickname: profiles.nickname, status: marketTags.status })
+    .from(marketTags)
+    .innerJoin(profiles, eq(profiles.id, marketTags.memberId))
+    .where(eq(marketTags.marketId, marketId));
+  const [p] = await db
+    .select({ yes: positions.yes, no: positions.no, invested: positions.invested })
+    .from(positions)
+    .where(and(eq(positions.marketId, marketId), eq(positions.memberId, viewerId)));
+  return { ...summary, bettingClosed: summary.closeAt <= now, asOf: now, creator, tags, mine: p ? { yes: p.yes, no: p.no, invested: BigInt(p.invested) } : null };
 }

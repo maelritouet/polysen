@@ -21,3 +21,12 @@ describe("formatCoinsFr", () => {
     expect(formatCoinsFr(0n, { sign: true })).toBe("0,00");
   });
 });
+
+describe("formatSharesFr", () => {
+  it("rounds down to 2 decimals with a French comma and grouped thousands", async () => {
+    const { formatSharesFr } = await import("./format");
+    const { D } = await import("@/core/money");
+    expect(formatSharesFr(D("134.729"))).toBe("134,72");
+    expect(formatSharesFr(D("12345.5"))).toBe(`12${NNBSP}345,50`);
+  });
+});

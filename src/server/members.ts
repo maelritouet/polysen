@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { STARTING_GRANT } from "@/core/ledger";
 import type { Db } from "@/db/client";
 import { ledger, profiles } from "@/db/schema";
@@ -111,4 +111,13 @@ export async function bootstrapAdmin(
     await tx.insert(ledger).values({ memberId: profile.id, amount: STARTING_GRANT, reason: "grant" });
     return profile;
   });
+}
+
+/** Members who can be tagged in a market (not suspended), by nickname. */
+export async function listMembers(db: Db): Promise<Array<{ id: string; firstName: string; nickname: string }>> {
+  return db
+    .select({ id: profiles.id, firstName: profiles.firstName, nickname: profiles.nickname })
+    .from(profiles)
+    .where(isNull(profiles.suspendedAt))
+    .orderBy(asc(sql`lower(${profiles.nickname})`));
 }
